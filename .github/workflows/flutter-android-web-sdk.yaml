@@ -36,7 +36,7 @@ jobs:
           rm -rf flutter/bin/cache/dart-sdk
           mv dart-sdk-src/out/ReleaseARM64 flutter/bin/cache/dart-sdk
 
-      # Step 5: Build Flutter CLI snapshots natively for ARM64
+      # Step 5: Build Flutter CLI snapshot for ARM64
       - name: 🟩 Build Flutter CLI snapshot for ARM64
         run: |
           cd flutter
@@ -44,7 +44,6 @@ jobs:
             --snapshot=bin/cache/flutter_snapshot.dart \
             --snapshot-kind=app-aot-arm64 \
             -o bin/cache/flutter_aot_snapshot.arm64
-          # Optional: verify snapshot is ARM64
           file bin/cache/flutter_aot_snapshot.arm64
 
       # Step 6: Precache Android + Web engines (ARM64-only)
@@ -73,7 +72,13 @@ jobs:
           cd flutter
           zip -r9 ../flutter-arm64-full-sdk.zip .
 
-      # Step 9: Upload the artifact
+      # Step 9: Verify the packaged ZIP contains only ARM64 binaries
+      - name: 🟩 Verify ZIP is 100% ARM64
+        run: |
+          unzip -q ../flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
+          find flutter-sdk-unzip -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found in ZIP!" && exit 1 || echo "ZIP is fully ARM64-native"
+
+      # Step 10: Upload the artifact
       - name: 🟩 Upload artifact
         uses: actions/upload-artifact@v4
         with:
