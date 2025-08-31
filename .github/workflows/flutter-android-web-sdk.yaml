@@ -1,0 +1,45 @@
+name: Flutter Android + Web SDK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 🟩 Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git unzip curl xz-utils zip python3
+
+      - name: 🟩 Clone Flutter stable
+        run: |
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+
+      - name: 🟩 Precache Android + Web
+        run: |
+          cd flutter
+          ./bin/flutter --version
+          ./bin/flutter precache --android --web --no-linux --no-ios --no-windows --no-macos
+
+      - name: 🟩 Trim SDK
+        run: |
+          cd flutter
+          rm -rf examples/ dev/ docs/
+          rm -rf bin/cache/pkg
+          # Remove engine binaries for non-target platforms
+          rm -rf bin/cache/artifacts/engine/linux-*
+          rm -rf bin/cache/artifacts/engine/darwin-*
+          rm -rf bin/cache/artifacts/engine/windows-*
+          rm -rf bin/cache/artifacts/engine/ios
+
+      - name: 🟩 Package minimal SDK
+        run: |
+          cd flutter
+          zip -r9 ../flutter-android-web-sdk.zip .
+
+      - name: 🟩 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-android-web-sdk
+          path: flutter-android-web-sdk.zip
