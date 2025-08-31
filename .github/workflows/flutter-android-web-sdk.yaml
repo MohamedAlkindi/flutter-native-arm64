@@ -15,7 +15,7 @@ jobs:
           sudo apt-get install -y \
             git unzip curl xz-utils zip python3 clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev libfreetype6-dev \
-            libfontconfig1-dev libc6-dev gcc g++ make file wget sha256sum
+            libfontconfig1-dev libc6-dev gcc g++ make file wget
 
       # Step 2: Clone Flutter stable
       - name: 🟩 Clone Flutter
@@ -31,7 +31,7 @@ jobs:
       - name: 🟩 Setup depot_tools and GN
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          export PATH="$PATH:$(pwd)/depot_tools"
+          export PATH="$PATH:$(pwd)/depot_tools:$PATH"
           cd dart-sdk-src
           python3 tools/gn/bootstrap.py
           cd ..
@@ -71,7 +71,7 @@ jobs:
           rm -rf bin/cache/artifacts/engine/windows-*
           rm -rf bin/cache/artifacts/engine/darwin-*
           rm -rf bin/cache/artifacts/engine/ios
-          # Extra check: ensure no x64 binaries remain
+          # Extra safety: ensure no x64 binaries remain
           find bin/cache -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found!" && exit 1 || echo "No x64 binaries detected"
 
       # Step 9: Package Flutter ARM64 SDK
@@ -93,8 +93,8 @@ jobs:
           find . -type f -exec sha256sum {} \; > ../flutter-sdk-checksums.txt
           echo "SHA256 checksums generated in flutter-sdk-checksums.txt"
 
-      # Step 12: Upload artifact
-      - name: 🟩 Upload artifact
+      # Step 12: Upload artifacts
+      - name: 🟩 Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flutter-arm64-full-sdk
