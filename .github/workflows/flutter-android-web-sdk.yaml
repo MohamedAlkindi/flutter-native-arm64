@@ -8,26 +8,35 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # Step 1: Install all build dependencies for ARM64 compilation
-      - name: 🟩 Install dependencies
+      # Step 1: Install all dependencies
+      - name: 🟩 Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             git unzip curl xz-utils zip python3 clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev libfreetype6-dev \
-            libfontconfig1-dev libc6-dev gcc g++ make file
+            libfontconfig1-dev libc6-dev gcc g++ make file wget
 
       # Step 2: Clone Flutter stable
       - name: 🟩 Clone Flutter
         run: |
           git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-      # Step 3: Clone Dart SDK source
+      # Step 3: Clone Dart SDK
       - name: 🟩 Clone Dart SDK
         run: |
           git clone https://github.com/dart-lang/sdk.git dart-sdk-src
 
-      # Step 4: Build Dart SDK for ARM64
+      # Step 4: Install depot_tools and GN
+      - name: 🟩 Setup depot_tools and GN
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          export PATH="$PATH:$(pwd)/depot_tools"
+          cd dart-sdk-src
+          python3 tools/gn/bootstrap.py
+          cd ..
+
+      # Step 5: Build Dart SDK for ARM64
       - name: 🟩 Build Dart SDK for ARM64
         run: |
           cd dart-sdk-src
@@ -36,49 +45,49 @@ jobs:
           rm -rf flutter/bin/cache/dart-sdk
           mv dart-sdk-src/out/ReleaseARM64 flutter/bin/cache/dart-sdk
 
-      # Step 5: Build Flutter CLI snapshot for ARM64
-      - name: 🟩 Build Flutter CLI snapshot for ARM64
+      # Step 6: Build Flutter CLI snapshot for ARM64
+      - name: 🟩 Build Flutter CLI snapshot
         run: |
           cd flutter
           ./bin/cache/dart-sdk/bin/dart \
             --snapshot=bin/cache/flutter_snapshot.dart \
             --snapshot-kind=app-aot-arm64 \
             -o bin/cache/flutter_aot_snapshot.arm64
+          # Verify snapshot architecture
           file bin/cache/flutter_aot_snapshot.arm64
 
-      # Step 6: Precache Android + Web engines (ARM64-only)
+      # Step 7: Precache Android + Web engines (ARM64-only)
       - name: 🟩 Precache Android + Web
         run: |
           cd flutter
           ./bin/flutter precache --android --web --no-linux --no-ios --no-windows --no-macos
 
-      # Step 7: Trim SDK to minimal ARM64
+      # Step 8: Trim SDK to minimal ARM64
       - name: 🟩 Trim SDK to minimal ARM64
         run: |
           cd flutter
           rm -rf examples/ dev/ docs/
           rm -rf bin/cache/pkg
-          # Remove all non-target platform binaries
           rm -rf bin/cache/artifacts/engine/linux-*
-          rm -rf bin/cache/artifacts/engine/darwin-*
           rm -rf bin/cache/artifacts/engine/windows-*
+          rm -rf bin/cache/artifacts/engine/darwin-*
           rm -rf bin/cache/artifacts/engine/ios
-          # Extra safety: remove any leftover x64 binaries
+          # Extra check: ensure no x64 binaries remain
           find bin/cache -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found!" && exit 1 || echo "No x64 binaries detected"
 
-      # Step 8: Package the fully native ARM64 Flutter SDK
+      # Step 9: Package Flutter ARM64 SDK
       - name: 🟩 Package Flutter ARM64 SDK
         run: |
           cd flutter
           zip -r9 ../flutter-arm64-full-sdk.zip .
 
-      # Step 9: Verify the packaged ZIP contains only ARM64 binaries
-      - name: 🟩 Verify ZIP is 100% ARM64
+      # Step 10: Verify the packaged ZIP is fully ARM64
+      - name: 🟩 Verify ZIP is fully ARM64
         run: |
           unzip -q ../flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
           find flutter-sdk-unzip -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found in ZIP!" && exit 1 || echo "ZIP is fully ARM64-native"
 
-      # Step 10: Upload the artifact
+      # Step 11: Upload artifact
       - name: 🟩 Upload artifact
         uses: actions/upload-artifact@v4
         with:
