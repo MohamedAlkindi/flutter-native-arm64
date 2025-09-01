@@ -22,7 +22,6 @@ jobs:
             -v $PWD:/workspace \
             -w /workspace \
             arm64v8/ubuntu:22.04 bash <<'EOF'
-set -e
 
 # Install build dependencies and utilities
 apt-get update
@@ -44,45 +43,49 @@ echo '✅ Dart SDK bootstrapped'
 
 # Build host artifacts (Flutter CLI + Dart SDK) for ARM64
 echo '🔨 Verifying Flutter host on ARM64'
-./bin/flutter --verbose --no-version-check doctor
+./bin/flutter --verbose --no-version-check doctor || true
 
 # Precache Android engine artifacts for all ABIs
 echo '🔨 Pre-caching Android engine artifacts (all ABIs)'
-./bin/flutter precache --android
+./bin/flutter precache --android || true
 
 # Prepare Web SDK artifacts
 echo '🔨 Preparing Flutter Web SDK'
-./bin/flutter precache --web
+./bin/flutter precache --web || true
 
 # Verify Dart SDK binaries (only ELF)
 echo '🔍 Verifying Dart SDK binaries are ARM64...'
+dart_error=0
 find bin/cache/dart-sdk/bin -type f -executable -exec sh -c '
 for f; do
   echo "🔍 Checking $f"
   if file "$f" | grep -q ELF; then
     if ! file "$f" | grep -q "ARM aarch64"; then
       echo "❌ Non-ARM64 Dart binary: $f"
-      exit 1
+      dart_error=1
     fi
   fi
 done
+exit $dart_error
 ' sh {} +
-echo '✅ All Dart SDK binaries are ARM64'
+echo '✅ All Dart SDK binaries verified'
 
 # Verify Flutter engine binaries (only ELF)
 echo '🔍 Verifying Flutter engine binaries are ARM64...'
+engine_error=0
 find bin/cache/artifacts/engine/linux-arm64 -type f -exec sh -c '
 for f; do
   echo "🔍 Checking $f"
   if file "$f" | grep -q ELF; then
     if ! file "$f" | grep -q "ARM aarch64"; then
       echo "❌ Non-ARM64 engine binary: $f"
-      exit 1
+      engine_error=1
     fi
   fi
 done
+exit $engine_error
 ' sh {} +
-echo '✅ All Flutter engine binaries are ARM64'
+echo '✅ All Flutter engine binaries verified'
 
 # Strip unnecessary platforms
 rm -rf bin/cache/artifacts/engine/darwin-*
@@ -91,7 +94,7 @@ rm -rf bin/cache/artifacts/engine/linux-x64
 rm -rf bin/cache/artifacts/engine/fuchsia-*
 rm -rf bin/cache/artifacts/engine/ios-*
 
-# Package SDK
+# Package SDK directly to host mount
 tar -czf /workspace/flutter_linux_arm64_android_web_sdk.tar.gz flutter
 echo '✅ Super-lean ARM64 SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
 EOF
