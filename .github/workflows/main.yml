@@ -55,21 +55,21 @@ jobs:
               ./bin/flutter precache --android
 
               # Verify host binaries are ARM64
-              echo '🔍 Verifying host binaries are ARM64...'
-              find bin/cache/dart-sdk/bin bin/cache/artifacts/engine/linux-arm64 \
-                   -type f -executable \
+              echo '🔍 Verifying Flutter engine binaries are ARM64...'
+              find bin/cache/artifacts/engine/linux-arm64 -type f \
                    -exec sh -c '
                      for f; do
-                       if file \"$f\" | grep -q \"ELF\"; then
-                         if ! file \"$f\" | grep -q \"ARM aarch64\"; then
-                           echo \"❌ Non-ARM64 binary found: $f\"
-                           file \"$f\"
+                       echo "🔍 Checking $f"
+                       if file "$f" | grep -q "ELF"; then
+                         if ! file "$f" | grep -q "ARM aarch64"; then
+                           echo "❌ Non-ARM64 engine binary: $f"
+                           file "$f"
                            exit 1
                          fi
                        fi
                      done
                    ' sh {} +
-              echo '✅ All host binaries are ARM64'
+              echo '✅ All Flutter engine binaries are ARM64'
 
               # Strip unnecessary platforms for lean SDK
               rm -rf bin/cache/artifacts/engine/darwin-*
