@@ -1,0 +1,120 @@
+name: Flutter ARM64 Cross-Compile SDK (Android + Web + Snapshot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # Step 1: Install dependencies
+      - name: 🟩 Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git curl unzip xz-utils zip python3 clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev libfreetype6-dev \
+            libfontconfig1-dev libc6-dev gcc g++ make file wget
+
+      # Step 2: Clone Flutter stable
+      - name: 🟩 Clone Flutter
+        run: |
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+
+      # Step 3: Setup depot_tools
+      - name: 🟩 Setup depot_tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "export PATH=$PATH:$(pwd)/depot_tools:$PATH" >> $GITHUB_ENV
+
+      # Step 4: Precache engines (Android + Web)
+      - name: 🟩 Precache engines
+        run: |
+          cd flutter
+          ./bin/flutter precache --android --web --no-ios --no-windows --no-macos --no-linux
+
+      # Step 5: Fetch Flutter Dart sources
+      - name: 🟩 Fetch Dart SDK from Flutter
+        run: |
+          cd flutter
+          ./bin/internal/update_dart_sdk.sh
+          cd ..
+
+      # Step 6: Cross-compile Dart SDK for ARM64 using GN + Ninja
+      - name: 🟩 Cross-compile Dart SDK ARM64
+        run: |
+          cd flutter/bin/cache/dart-sdk
+          git clone https://github.com/dart-lang/sdk.git dart-sdk-src
+          cd dart-sdk-src
+          python3 tools/gn/bootstrap/bootstrap.py --no-clean
+          export PATH="$PWD/depot_tools:$PATH"
+          gn gen out/arm64 --args='target_cpu="arm64" target_os="linux" is_debug=false'
+          ninja -C out/arm64 create_sdk
+          cd ../..
+          rm -rf flutter/bin/cache/dart-sdk
+          mv flutter/bin/cache/dart-sdk/dart-sdk-src/out/arm64 flutter/bin/cache/dart-sdk
+
+      # Step 7: Verify Dart binaries are ARM64
+      - name: 🟩 Verify Dart SDK binaries
+        run: |
+          cd flutter/bin/cache/dart-sdk/bin
+          for f in dart dartaotruntime dart_precompiled_runtime; do
+            file "$f" | grep "aarch64" || (echo "$f is not ARM64!" && exit 1)
+          done
+
+      # Step 8: Build Flutter CLI snapshot for ARM64
+      - name: 🟩 Build Flutter CLI snapshot
+        run: |
+          cd flutter
+          # Run Dart AOT snapshot generation for ARM64 using the cross-compiled Dart SDK
+          ./bin/cache/dart-sdk/bin/dart \
+            --snapshot-kind=app-jit \
+            --snapshot=bin/cache/flutter_aot_snapshot.arm64 \
+            bin/cache/flutter_snapshot.dart
+          # Verify snapshot is ARM64
+          file bin/cache/flutter_aot_snapshot.arm64 | grep "aarch64" || (echo "Flutter snapshot is not ARM64!" && exit 1)
+
+      # Step 9: Trim SDK to Android + Web only
+      - name: 🟩 Trim SDK
+        run: |
+          cd flutter
+          rm -rf examples/ dev/ docs/
+          rm -rf bin/cache/pkg
+          rm -rf bin/cache/artifacts/engine/linux-*
+          rm -rf bin/cache/artifacts/engine/windows-*
+          rm -rf bin/cache/artifacts/engine/darwin-*
+          rm -rf bin/cache/artifacts/engine/ios
+
+      # Step 10: Verify all files in Flutter SDK are ARM64
+      - name: 🟩 Verify all binaries and snapshots are ARM64
+        run: |
+          cd flutter
+          while IFS= read -r f; do
+            if [ -f "$f" ]; then
+              file "$f" | grep "aarch64" || (echo "ERROR: $f is not ARM64!" && exit 1)
+            fi
+          done < <(find . -type f)
+
+      # Step 11: Package Flutter ARM64 SDK
+      - name: 🟩 Package SDK
+        run: |
+          cd flutter
+          zip -r9 ../flutter-arm64-full-sdk.zip .
+
+      # Step 12: Generate SHA256 checksums
+      - name: 🟩 Generate SHA256 checksums
+        run: |
+          unzip -q ../flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
+          cd flutter-sdk-unzip
+          find . -type f -exec sha256sum {} \; > ../flutter-sdk-checksums.txt
+          echo "SHA256 checksums generated"
+
+      # Step 13: Upload artifacts
+      - name: 🟩 Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-arm64-full-sdk
+          path: |
+            flutter-arm64-full-sdk.zip
+            flutter-sdk-checksums.txt
