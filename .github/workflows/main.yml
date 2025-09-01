@@ -11,30 +11,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU for ARM64
+      - name: Set up QEMU for ARM64 emulation
         uses: docker/setup-qemu-action@v3
         with:
           platforms: all
 
-      - name: Build Fully Native ARM64 Flutter SDK (optimized)
+      - name: Build Fully Native ARM64 Flutter SDK
         run: |
+          # Write Dockerfile
           cat <<'EOF' > Dockerfile
+          # -----------------------------
+          # Fully native ARM64 Flutter SDK for Android + Web
+          # -----------------------------
           FROM --platform=linux/arm64 ubuntu:22.04 AS base
 
           WORKDIR /app
 
-          # Install dependencies
+          # Install dependencies including CA certificates
           RUN apt-get update && apt-get install -y --no-install-recommends \
               git curl unzip xz-utils cmake clang ninja-build pkg-config \
               libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev \
               libfreetype6-dev libfontconfig1-dev libc6-dev gcc g++ make \
-              file python3 wget jq zip && \
+              file python3 wget jq zip ca-certificates && \
+              update-ca-certificates && \
               rm -rf /var/lib/apt/lists/*
 
-          # Clone Flutter SDK (stable)
+          # Clone Flutter SDK (stable branch)
           RUN git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-          # Clone Flutter engine (stable)
+          # Clone Flutter Engine (stable branch)
           RUN git clone https://github.com/flutter/engine.git -b stable --depth 1 engine
 
           # -----------------------------
@@ -65,21 +70,24 @@ jobs:
           RUN ./bin/flutter precache --web --no-linux --no-windows --no-macos --force
 
           # -----------------------------
-          # 4️⃣ Clean up and package
+          # 4️⃣ Clean up and package SDK
           # -----------------------------
           RUN rm -rf examples dev docs bin/cache/pkg
           WORKDIR /app
           RUN zip -r flutter-arm64-full-sdk.zip flutter
 
+          # -----------------------------
+          # 5️⃣ Final stage (extractable ZIP)
+          # -----------------------------
           FROM --platform=linux/arm64 scratch
           COPY --from=web-artifacts /app/flutter-arm64-full-sdk.zip /flutter-arm64-full-sdk.zip
           CMD ["/bin/true"]
           EOF
 
-          # Build the image with ARM64 target platform
+          # Build Docker image for ARM64
           docker buildx build --platform linux/arm64 -t flutter-arm64-builder --load .
 
-          # Extract the final ZIP
+          # Extract the SDK ZIP
           docker create --name flutter-temp-container flutter-arm64-builder
           docker cp flutter-temp-container:/flutter-arm64-full-sdk.zip .
           docker rm flutter-temp-container
