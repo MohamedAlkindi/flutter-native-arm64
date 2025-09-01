@@ -44,9 +44,9 @@ jobs:
               ./bin/flutter --verbose --no-version-check doctor
 
               # Build Web SDK
-              echo '🔨 Building Web SDK'
-              ./bin/flutter build bundle --release --target-platform=web-server
-
+              echo '🔨 Preparing Flutter Web SDK artifacts'
+              ./bin/flutter precache --web
+              
               # Build Android engines (all ABIs)
               for ABI in arm arm64 x86 x64; do
                 echo '🔨 Building Android engine for ABI: '$ABI
