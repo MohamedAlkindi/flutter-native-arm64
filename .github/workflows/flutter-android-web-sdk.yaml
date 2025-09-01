@@ -23,39 +23,39 @@ jobs:
       - name: 🟩 Setup depot_tools
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          export PATH="$PATH:$(pwd)/depot_tools:$PATH"
+          echo "export PATH=$PATH:$(pwd)/depot_tools" >> $GITHUB_ENV
 
       - name: 🟩 Precache engines (include Linux host temporarily)
         run: |
           cd flutter
           ./bin/flutter precache --linux --android --web --no-ios --no-windows --no-macos
 
-      - name: 🟩 Fetch Flutter Dart (now engine.stamp exists)
+      - name: 🟩 Fetch Flutter Dart (engine.stamp now exists)
         run: |
           cd flutter
           ./bin/internal/update_dart_sdk.sh
           cd ..
 
-      - name: 🟩 Build Dart SDK ARM64
-        run: |
-          cd flutter/bin/cache/dart-sdk
-          export PATH="$PWD/../../../../depot_tools:$PATH"
-          ./tools/build.py --mode release --arch arm64 create_sdk
-          cd ../../..
-
-      - name: 🟩 Replace Flutter Dart SDK with ARM64 build
-        run: |
-          rm -rf flutter/bin/cache/dart-sdk
-          mv flutter/bin/cache/dart-sdk/out/ReleaseARM64 flutter/bin/cache/dart-sdk
-
       - name: 🟩 Build Flutter CLI snapshot for ARM64
         run: |
           cd flutter
+          # Verify Dart exists
+          if [ ! -f bin/cache/dart-sdk/bin/dart ]; then echo "Dart SDK missing!" && exit 1; fi
           ./bin/cache/dart-sdk/bin/dart \
             --snapshot=bin/cache/flutter_snapshot.dart \
             --snapshot-kind=app-aot-arm64 \
             -o bin/cache/flutter_aot_snapshot.arm64
+          # Check snapshot architecture
           file bin/cache/flutter_aot_snapshot.arm64
+
+      - name: 🟩 Verify all Dart binaries are ARM64
+        run: |
+          cd flutter/bin/cache/dart-sdk/bin
+          for f in dart dart_precompiled_runtime dartaotruntime; do
+            if [ -f "$f" ]; then
+              file "$f" | grep "aarch64" || (echo "$f is not ARM64!" && exit 1)
+            fi
+          done
 
       - name: 🟩 Trim SDK to ARM64 only
         run: |
@@ -66,6 +66,7 @@ jobs:
           rm -rf bin/cache/artifacts/engine/windows-*
           rm -rf bin/cache/artifacts/engine/darwin-*
           rm -rf bin/cache/artifacts/engine/ios
+          # Verify no x64 binaries remain
           find bin/cache -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found!" && exit 1 || echo "No x64 binaries detected"
 
       - name: 🟩 Package Flutter ARM64 SDK
