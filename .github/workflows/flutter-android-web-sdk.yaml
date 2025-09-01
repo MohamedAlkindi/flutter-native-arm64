@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # Step 1: Install all system dependencies
+      # Step 1: Install all dependencies
       - name: 🟩 Install dependencies
         run: |
           sudo apt-get update
@@ -22,34 +22,39 @@ jobs:
         run: |
           git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-      # Step 3: Fetch exact Dart sources that match this Flutter commit
-      - name: 🟩 Fetch Flutter Dart sources
+      # Step 3: Fetch Flutter’s exact Dart sources
+      - name: 🟩 Fetch Flutter Dart
         run: |
           cd flutter
-          # This script downloads Dart at the exact version Flutter expects
           ./bin/internal/update_dart_sdk.sh
           cd ..
 
-      # Step 4: Setup depot_tools and GN
+      # Step 4: Setup depot_tools
       - name: 🟩 Setup depot_tools
         run: |
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH="$PATH:$(pwd)/depot_tools:$PATH"
 
-      # Step 5: Build Dart SDK for ARM64 (Flutter-matched)
+      # Step 5: Build Dart SDK for ARM64
       - name: 🟩 Build Dart SDK ARM64
         run: |
           cd flutter/bin/cache/dart-sdk
           ./tools/build.py --mode release --arch arm64 create_sdk
           cd ../../..
 
-      # Step 6: Replace Flutter cache Dart SDK
-      - name: 🟩 Replace Flutter Dart SDK with ARM64 build
+      # Step 6: Replace Flutter Dart SDK with ARM64 build
+      - name: 🟩 Replace Dart SDK
         run: |
           rm -rf flutter/bin/cache/dart-sdk
           mv flutter/bin/cache/dart-sdk/out/ReleaseARM64 flutter/bin/cache/dart-sdk
 
-      # Step 7: Build Flutter CLI snapshot for ARM64
+      # Step 7: Precache necessary engines (include Linux host temporarily)
+      - name: 🟩 Precache engines
+        run: |
+          cd flutter
+          ./bin/flutter precache --linux --android --web --no-ios --no-windows --no-macos
+
+      # Step 8: Build Flutter CLI snapshot for ARM64
       - name: 🟩 Build Flutter CLI snapshot
         run: |
           cd flutter
@@ -59,18 +64,13 @@ jobs:
             -o bin/cache/flutter_aot_snapshot.arm64
           file bin/cache/flutter_aot_snapshot.arm64
 
-      # Step 8: Precache Android + Web engines (ARM64 only)
-      - name: 🟩 Precache Android + Web
-        run: |
-          cd flutter
-          ./bin/flutter precache --android --web --no-linux --no-ios --no-windows --no-macos
-
       # Step 9: Trim SDK to minimal ARM64
       - name: 🟩 Trim SDK
         run: |
           cd flutter
           rm -rf examples/ dev/ docs/
           rm -rf bin/cache/pkg
+          # Remove host binaries (Linux x64) and other non-ARM64
           rm -rf bin/cache/artifacts/engine/linux-*
           rm -rf bin/cache/artifacts/engine/windows-*
           rm -rf bin/cache/artifacts/engine/darwin-*
@@ -83,7 +83,7 @@ jobs:
           cd flutter
           zip -r9 ../flutter-arm64-full-sdk.zip .
 
-      # Step 11: Verify final ZIP is fully ARM64
+      # Step 11: Verify final ZIP is ARM64 only
       - name: 🟩 Verify ARM64
         run: |
           unzip -q ../flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
@@ -96,7 +96,7 @@ jobs:
           find . -type f -exec sha256sum {} \; > ../flutter-sdk-checksums.txt
           echo "SHA256 checksums generated"
 
-      # Step 13: Upload artifact
+      # Step 13: Upload artifacts
       - name: 🟩 Upload artifacts
         uses: actions/upload-artifact@v4
         with:
