@@ -1,4 +1,4 @@
-name: Build Flutter SDK (ARM64 Host, Android + Web only via QEMU)
+apt name: Build Flutter SDK (ARM64 Host, Android + Web only via QEMU)
 
 on:
   workflow_dispatch:
@@ -27,9 +27,9 @@ jobs:
               # Install build dependencies and certificates
               apt-get update
               apt-get install -y git curl unzip xz-utils zip clang ninja-build pkg-config \
-                                 gcc g++ python3 cmake openjdk-17-jdk ca-certificates
+                                 gcc g++ python3 cmake openjdk-17-jdk ca-certificates file
               update-ca-certificates
-              echo '✅ Certificates installed'
+              echo '✅ Certificates and file utility installed'
 
               # Clean workspace in case of cached binaries
               rm -rf flutter
