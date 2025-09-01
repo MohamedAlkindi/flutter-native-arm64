@@ -1,4 +1,4 @@
-name: Flutter ARM64 Cross-Compile SDK (Android + Web)
+name: Flutter ARM64 Cross-Compile
 
 on:
   workflow_dispatch:
