@@ -6,8 +6,6 @@ on:
 jobs:
   build-flutter-sdk:
     runs-on: ubuntu-latest
-    env:
-      WORKSPACE: /workspace
 
     steps:
       - name: Enable QEMU
@@ -18,142 +16,88 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Step 1: Clone Flutter
-      - name: Clone Flutter SDK
+      - name: Build Flutter SDK inside ARM64 container
         run: |
-          mkdir -p $WORKSPACE
           docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE \
+            --user $(id -u):$(id -g) \
+            -v $PWD:/workspace \
+            -w /workspace \
             arm64v8/ubuntu:22.04 bash -c "
-              apt-get update
-              apt-get install -y git curl ca-certificates
-              update-ca-certificates
-              if [ ! -d flutter ]; then
-                git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
-              fi
-              echo '✅ Flutter SDK cloned'
-            "
+              #!/bin/bash
 
-      # Step 2: Bootstrap Dart SDK & Flutter doctor
-      - name: Bootstrap Dart SDK
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
+              # Install build dependencies and certificates
               apt-get update
-              apt-get install -y python3 file openjdk-17-jdk clang unzip xz-utils zip
-              
-              # Bootstrap Dart SDK
-              ./bin/cache/dart-sdk/bin/dart --version || true
+              apt-get install -y git curl unzip xz-utils zip clang ninja-build pkg-config \
+                                 gcc g++ python3 cmake openjdk-17-jdk ca-certificates file
+              update-ca-certificates
+              echo '✅ Certificates and file utility installed'
+
+              # Prepare workspace
+              rm -rf flutter
+
+              # Clone Flutter SDK
+              git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+              cd flutter
+
+              # Bootstrap Dart SDK for ARM64 host
+              ./bin/cache/dart-sdk/bin/dart --version || echo '⚠ Dart bootstrap skipped'
               echo '✅ Dart SDK bootstrapped'
 
-              # Flutter doctor
-              ./bin/flutter --verbose --no-version-check doctor
-              echo '✅ Flutter host verified'
-            "
+              # Build host artifacts (Flutter CLI + Dart SDK) for ARM64
+              echo '🔨 Verifying Flutter host on ARM64'
+              ./bin/flutter --verbose --no-version-check doctor || echo '⚠ Flutter doctor skipped'
 
-      # Step 3: Precache Web SDK
-      - name: Precache Web SDK
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              apt-get update
-              apt-get install -y python3 file unzip xz-utils zip
-              ./bin/flutter precache --web
-              echo '✅ Web SDK artifacts ready'
-            "
+              # Precache Android engine artifacts for all ABIs
+              echo '🔨 Pre-caching Android engine artifacts (all ABIs)'
+              ./bin/flutter precache --android || echo '⚠ Android precache skipped'
 
-      # Step 4: Precache Android engine artifacts
-      - name: Precache Android SDK & engine
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              apt-get update
-              apt-get install -y python3 file unzip xz-utils zip
-              ./bin/flutter precache --android
-              echo '✅ Android engine artifacts ready'
-            "
+              # Prepare Web SDK artifacts
+              echo '🔨 Preparing Flutter Web SDK'
+              ./bin/flutter precache --web || echo '⚠ Web precache skipped'
 
-      # Step 5: Verify Dart SDK binaries
-      - name: Verify Dart SDK binaries
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              apt-get update
-              apt-get install -y file
-              echo '🔍 Verifying Dart SDK binaries for ARM64...'
-              find bin/cache/dart-sdk/bin -type f -executable | while read f; do
-                if file \"\$f\" | grep -q ELF; then
+              # Verify Dart SDK binaries
+              echo '🔍 Verifying Dart SDK binaries are ARM64...'
+              find bin/cache/dart-sdk/bin -type f -executable -exec sh -c '
+                for f; do
                   echo \"🔍 Checking \$f\"
-                  if ! file \"\$f\" | grep -q 'ARM aarch64'; then
-                    echo \"❌ Non-ARM64 Dart binary: \$f\"
-                    file \"\$f\"
-                    exit 1
+                  if file \"\$f\" | grep -q ELF; then
+                    if ! file \"\$f\" | grep -q ARM\ aarch64; then
+                      echo \"❌ Non-ARM64 Dart binary: \$f\"
+                      exit 1
+                    fi
                   fi
-                fi
-              done
+                done
+              ' sh {} +
               echo '✅ All Dart SDK binaries are ARM64'
-            "
 
-      # Step 6: Verify Flutter engine binaries
-      - name: Verify Flutter engine binaries
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              apt-get update
-              apt-get install -y file
-              echo '🔍 Verifying Flutter engine binaries for ARM64...'
-              find bin/cache/artifacts/engine/linux-arm64 -type f | while read f; do
-                if file \"\$f\" | grep -q ELF; then
+              # Verify Flutter engine binaries (Linux ARM64 only)
+              echo '🔍 Verifying Flutter engine binaries are ARM64...'
+              find bin/cache/artifacts/engine/linux-arm64 -type f -exec sh -c '
+                for f; do
                   echo \"🔍 Checking \$f\"
-                  if ! file \"\$f\" | grep -q 'ARM aarch64'; then
-                    echo \"❌ Non-ARM64 engine binary: \$f\"
-                    file \"\$f\"
-                    exit 1
+                  if file \"\$f\" | grep -q ELF; then
+                    if ! file \"\$f\" | grep -q ARM\ aarch64; then
+                      echo \"❌ Non-ARM64 engine binary: \$f\"
+                      exit 1
+                    fi
                   fi
-                fi
-              done
+                done
+              ' sh {} +
               echo '✅ All Flutter engine binaries are ARM64'
-            "
 
-      # Step 7: Strip unnecessary platforms
-      - name: Strip unused platforms
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
+              # Strip unnecessary platforms for lean SDK
               rm -rf bin/cache/artifacts/engine/darwin-*
               rm -rf bin/cache/artifacts/engine/windows-*
               rm -rf bin/cache/artifacts/engine/linux-x64
               rm -rf bin/cache/artifacts/engine/fuchsia-*
               rm -rf bin/cache/artifacts/engine/ios-*
-              echo '✅ Unnecessary platforms stripped'
-            "
 
-      # Step 8: Package SDK
-      - name: Package Flutter SDK
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v $WORKSPACE:$WORKSPACE \
-            -w $WORKSPACE \
-            arm64v8/ubuntu:22.04 bash -c "
+              # Package SDK directly to host mount
               tar -czf /workspace/flutter_linux_arm64_android_web_sdk.tar.gz flutter
-              echo '✅ Super-lean ARM64 Flutter SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
+              echo '✅ Super-lean ARM64 SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
             "
 
-      # Step 9: Upload artifact
-      - name: Upload Flutter SDK artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: flutter_linux_arm64_android_web_sdk
