@@ -18,41 +18,32 @@ jobs:
       - name: Clone Flutter stable
         run: git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-      - name: Download Dart SDK ARM64
-        run: |
-          DART_VER=$(curl -s "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/VERSION" | jq -r '.version')
-          wget -O dart-sdk-arm64.zip "https://storage.googleapis.com/dart-archive/channels/stable/release/$DART_VER/linux-arm64/dart-sdk.zip"
-          unzip -o dart-sdk-arm64.zip -d flutter/bin/cache/
-          mv flutter/bin/cache/dart-sdk flutter/bin/cache/dart-sdk-arm64
-          rm dart-sdk-arm64.zip
-          mv flutter/bin/cache/dart-sdk-arm64 flutter/bin/cache/dart-sdk
-
-      
-      - name: Configure Flutter with ARM64 Dart SDK
-        run: |
-          cd flutter
-          export PATH="$PWD/bin/cache/dart-sdk/bin:$PATH"
-          echo "PATH=$PATH" >> $GITHUB_ENV
-          ./bin/flutter doctor
-
       - name: Precache engines
         run: |
           cd flutter
           ./bin/flutter precache --android --web --no-linux --no-ios --no-windows --no-macos
-          ./bin/flutter doctor -v
 
+      - name: Rebuild Flutter CLI snapshots for ARM64
+        run: |
+          # This command ensures all Dart VM snapshots are compiled for the host architecture (ARM64)
+          # using the Dart VM already in the precached Flutter SDK.
+          cd flutter
+          ./bin/flutter --no-enable-analytics --no-enable-web
+          
       - name: Verify all binaries and snapshots are ARM64
         run: |
           cd flutter
           find . -type f -executable -print0 | while IFS= read -r -d '' f; do
             file_output=$(file "$f")
             if [[ "$file_output" =~ "ELF" ]]; then
-                if [[ ! "$file_output" =~ "aarch64" ]]; then
-                    echo "Error: Non-ARM64 binary found: $f"
-                    exit 1
-                fi
+              if [[ ! "$file_output" =~ "aarch64" ]]; then
+                echo "Error: Non-ARM64 binary found: $f"
+                exit 1
+              fi
             fi
           done
+          # This step will confirm all snapshots are also aarch64
+          file bin/cache/flutter_tools.snapshot
 
       - name: Package SDK
         run: |
