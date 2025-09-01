@@ -5,53 +5,80 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04-arm64   # Native ARM64 runner
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y \
-            git curl unzip xz-utils cmake clang ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev \
-            libfreetype6-dev libfontconfig1-dev libc6-dev gcc g++ make \
-            file python3 wget jq zip && \
-            sudo rm -rf /var/lib/apt/lists/*
+      - name: Set up QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
-      - name: Clone Flutter and Engine
+      - name: Build and Package Fully Native ARM64 Flutter SDK
         run: |
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
-          git clone https://github.com/flutter/engine.git -b stable --depth 1 engine
+          # Write Dockerfile for ARM64 build
+          cat <<'EOF' > Dockerfile
+          FROM --platform=linux/arm64 ubuntu:22.04
 
-      - name: Build Engine for ARM64 host + Android target
-        run: |
-          cd engine
-          ./flutter/tools/gn --unoptimized --android --runtime-mode=release \
-            --target-platform=android-arm64 --host-arch=arm64
-          ninja -C out/host_release
+          WORKDIR /app
 
-      - name: Copy host tools and Android engine artifacts
-        run: |
-          cp engine/out/host_release/gen_snapshot flutter/bin/cache/artifacts/engine/host_debug_unopt/gen_snapshot
-          cp engine/out/host_release/dart flutter/bin/cache/dart-sdk/bin/dart
-          mkdir -p flutter/bin/cache/artifacts/engine/android-arm64-release
-          cp -r engine/out/host_release/* flutter/bin/cache/artifacts/engine/android-arm64-release/
+          # Install dependencies
+          RUN apt-get update && apt-get install -y --no-install-recommends \
+              git curl unzip xz-utils cmake clang ninja-build pkg-config \
+              libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev \
+              libfreetype6-dev libfontconfig1-dev libc6-dev gcc g++ make \
+              file python3 wget jq zip && \
+              rm -rf /var/lib/apt/lists/*
 
-      - name: Precache Web artifacts
-        run: |
-          cd flutter
-          ./bin/flutter precache --web --no-linux --no-windows --no-macos --force
+          # Clone Flutter SDK
+          RUN git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-      - name: Clean unnecessary files
-        run: |
-          rm -rf flutter/examples flutter/dev flutter/docs flutter/bin/cache/pkg
+          # Clone Flutter Engine
+          RUN git clone https://github.com/flutter/engine.git -b stable --depth 1 engine
 
-      - name: Package Flutter SDK
-        run: |
-          zip -r flutter-arm64-full-sdk.zip flutter
-          sha256sum flutter-arm64-full-sdk.zip > flutter-arm64-full-sdk.zip.sha256
+          WORKDIR /app/engine
+
+          # Build engine for ARM64 host + Android target
+          RUN ./flutter/tools/gn --unoptimized --android --runtime-mode=release \
+              --target-platform=android-arm64 --host-arch=arm64
+
+          RUN ninja -C out/host_release
+
+          # Copy ARM64 host tools into Flutter SDK
+          RUN cp out/host_release/gen_snapshot /app/flutter/bin/cache/artifacts/engine/host_debug_unopt/gen_snapshot && \
+              cp out/host_release/dart /app/flutter/bin/cache/dart-sdk/bin/dart && \
+              cp out/host_release/flutter_tester /app/flutter/bin/cache/artifacts/engine/host_debug_unopt/flutter_tester
+
+          # Copy Android ARM64 engine artifacts
+          RUN mkdir -p /app/flutter/bin/cache/artifacts/engine/android-arm64-release && \
+              cp -r out/host_release/* /app/flutter/bin/cache/artifacts/engine/android-arm64-release/
+
+          WORKDIR /app/flutter
+
+          # Precache Web artifacts only
+          RUN ./bin/flutter precache --web --no-linux --no-windows --no-macos --force
+
+          # Remove unnecessary files to reduce size
+          RUN rm -rf examples dev docs bin/cache/pkg
+
+          # Package the SDK
+          WORKDIR /app
+          RUN zip -r flutter-arm64-full-sdk.zip flutter
+
+          FROM --platform=linux/arm64 scratch
+          COPY --from=0 /app/flutter-arm64-full-sdk.zip /flutter-arm64-full-sdk.zip
+          CMD ["/bin/true"]
+          EOF
+
+          # Build Docker image with ARM64 platform
+          docker buildx build --platform linux/arm64 -t flutter-arm64-builder --load .
+
+          # Extract the packaged SDK
+          docker create --name flutter-temp-container flutter-arm64-builder
+          docker cp flutter-temp-container:/flutter-arm64-full-sdk.zip .
+          docker rm flutter-temp-container
 
       - name: Verify all ELF binaries are ARM64
         run: |
@@ -62,6 +89,9 @@ jobs:
           else
             echo "✅ All ELF binaries are ARM64."
           fi
+
+      - name: Generate SHA256 checksum
+        run: sha256sum flutter-arm64-full-sdk.zip > flutter-arm64-full-sdk.zip.sha256
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
