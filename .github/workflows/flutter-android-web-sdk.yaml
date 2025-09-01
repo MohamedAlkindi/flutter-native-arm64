@@ -8,8 +8,8 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # Step 1: Install all dependencies
-      - name: 🟩 Install dependencies
+      # Step 1: Install dependencies
+      - name: 🟩 Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -22,7 +22,7 @@ jobs:
         run: |
           git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-      # Step 3: Fetch Flutter’s exact Dart sources
+      # Step 3: Fetch Flutter's exact Dart sources
       - name: 🟩 Fetch Flutter Dart
         run: |
           cd flutter
@@ -48,8 +48,8 @@ jobs:
           rm -rf flutter/bin/cache/dart-sdk
           mv flutter/bin/cache/dart-sdk/out/ReleaseARM64 flutter/bin/cache/dart-sdk
 
-      # Step 7: Precache necessary engines (include Linux host temporarily)
-      - name: 🟩 Precache engines
+      # Step 7: Precache engines (include Linux host temporarily)
+      - name: 🟩 Precache engines for snapshot
         run: |
           cd flutter
           ./bin/flutter precache --linux --android --web --no-ios --no-windows --no-macos
@@ -64,17 +64,18 @@ jobs:
             -o bin/cache/flutter_aot_snapshot.arm64
           file bin/cache/flutter_aot_snapshot.arm64
 
-      # Step 9: Trim SDK to minimal ARM64
-      - name: 🟩 Trim SDK
+      # Step 9: Trim all non-ARM64 binaries
+      - name: 🟩 Trim SDK to ARM64 only
         run: |
           cd flutter
           rm -rf examples/ dev/ docs/
           rm -rf bin/cache/pkg
-          # Remove host binaries (Linux x64) and other non-ARM64
+          # Remove host artifacts now that snapshot exists
           rm -rf bin/cache/artifacts/engine/linux-*
           rm -rf bin/cache/artifacts/engine/windows-*
           rm -rf bin/cache/artifacts/engine/darwin-*
           rm -rf bin/cache/artifacts/engine/ios
+          # Verify no x64 binaries remain
           find bin/cache -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found!" && exit 1 || echo "No x64 binaries detected"
 
       # Step 10: Package Flutter ARM64 SDK
