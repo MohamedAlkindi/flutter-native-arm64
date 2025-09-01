@@ -16,12 +16,14 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Download latest Flutter SDK artifact from previous run
-        uses: actions/download-artifact@v4
+      - name: Download Flutter SDK artifact by run ID
+        uses: dawidd6/action-download-artifact@v11
         with:
-          name: flutter_linux_arm64_android_web_sdk
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          run_id: 17376756361
+          artifact_id: 3897988374
           path: ./artifact
-
+          
       - name: Verify Flutter SDK inside ARM64 container
         run: |
           docker run --rm --platform linux/arm64 \
