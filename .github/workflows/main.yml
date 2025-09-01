@@ -21,83 +21,80 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v $PWD:/workspace \
             -w /workspace \
-            arm64v8/ubuntu:22.04 bash -c "
-              set -e
+            arm64v8/ubuntu:22.04 bash <<'EOF'
+set -e
 
-              # Install build dependencies and certificates
-              apt-get update
-              apt-get install -y git curl unzip xz-utils zip clang ninja-build pkg-config \
-                                 gcc g++ python3 cmake openjdk-17-jdk ca-certificates file
-              update-ca-certificates
-              echo '✅ Certificates and file utility installed'
+# Install build dependencies and utilities
+apt-get update
+apt-get install -y git curl unzip xz-utils zip clang ninja-build pkg-config \
+                   gcc g++ python3 cmake openjdk-17-jdk ca-certificates file
+update-ca-certificates
+echo '✅ Certificates and file utility installed'
 
-              # Clean workspace in case of cached binaries
-              rm -rf flutter
+# Clean workspace
+rm -rf flutter
 
-              # Clone Flutter SDK
-              git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
-              cd flutter
+# Clone Flutter SDK
+git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+cd flutter
 
-              # Bootstrap Dart SDK for ARM64 host
-              ./bin/cache/dart-sdk/bin/dart --version || true
-              echo '✅ Dart SDK bootstrapped'
+# Bootstrap Dart SDK
+./bin/cache/dart-sdk/bin/dart --version || true
+echo '✅ Dart SDK bootstrapped'
 
-              # Build host artifacts (Flutter CLI + Dart SDK) for ARM64
-              echo '🔨 Verifying Flutter host on ARM64'
-              ./bin/flutter --verbose --no-version-check doctor
+# Build host artifacts (Flutter CLI + Dart SDK) for ARM64
+echo '🔨 Verifying Flutter host on ARM64'
+./bin/flutter --verbose --no-version-check doctor
 
-              # Precache Android engine artifacts for all ABIs
-              echo '🔨 Pre-caching Android engine artifacts (all ABIs)'
-              ./bin/flutter precache --android
+# Precache Android engine artifacts for all ABIs
+echo '🔨 Pre-caching Android engine artifacts (all ABIs)'
+./bin/flutter precache --android
 
-              # Prepare Web SDK artifacts
-              echo '🔨 Preparing Flutter Web SDK'
-              ./bin/flutter precache --web
+# Prepare Web SDK artifacts
+echo '🔨 Preparing Flutter Web SDK'
+./bin/flutter precache --web
 
-              # Dart SDK binaries
-              echo '🔍 Verifying Dart SDK binaries are ARM64...'
-              find bin/cache/dart-sdk/bin -type f -executable -exec sh -c '
-              for f; do
-                if file "$f" | grep -q "ELF"; then
-                  echo "🔍 Checking ELF Dart binary $f"
-                  if ! file "$f" | grep -q "ARM aarch64"; then
-                    echo "❌ Non-ARM64 Dart binary: $f"
-                    exit 1
-                  fi
-                else
-                  echo "ℹ️ Skipping non-ELF Dart file: $f"
-                fi
-              done
-              ' sh {} +
-              echo '✅ All Dart SDK ELF binaries are ARM64'
-              
-              # Flutter engine binaries
-              echo '🔍 Verifying Flutter engine binaries are ARM64...'
-              find bin/cache/artifacts/engine/linux-arm64 -type f -exec sh -c '
-              for f; do
-                if file "$f" | grep -q "ELF"; then
-                  echo "🔍 Checking ELF Flutter engine binary $f"
-                  if ! file "$f" | grep -q "ARM aarch64"; then
-                    echo "❌ Non-ARM64 Flutter engine binary: $f"
-                    exit 1
-                  fi
-                else
-                  echo "ℹ️ Skipping non-ELF Flutter engine file: $f"
-                fi
-              done
-              ' sh {} +
-              echo '✅ All Flutter engine ELF binaries are ARM64'
-              # Strip unnecessary platforms for lean SDK
-              rm -rf bin/cache/artifacts/engine/darwin-*
-              rm -rf bin/cache/artifacts/engine/windows-*
-              rm -rf bin/cache/artifacts/engine/linux-x64
-              rm -rf bin/cache/artifacts/engine/fuchsia-*
-              rm -rf bin/cache/artifacts/engine/ios-*
+# Verify Dart SDK binaries (only ELF)
+echo '🔍 Verifying Dart SDK binaries are ARM64...'
+find bin/cache/dart-sdk/bin -type f -executable -exec sh -c '
+for f; do
+  echo "🔍 Checking $f"
+  if file "$f" | grep -q ELF; then
+    if ! file "$f" | grep -q "ARM aarch64"; then
+      echo "❌ Non-ARM64 Dart binary: $f"
+      exit 1
+    fi
+  fi
+done
+' sh {} +
+echo '✅ All Dart SDK binaries are ARM64'
 
-              # Package SDK directly to host mount
-              tar -czf /workspace/flutter_linux_arm64_android_web_sdk.tar.gz flutter
-              echo '✅ Super-lean ARM64 SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
-            "
+# Verify Flutter engine binaries (only ELF)
+echo '🔍 Verifying Flutter engine binaries are ARM64...'
+find bin/cache/artifacts/engine/linux-arm64 -type f -exec sh -c '
+for f; do
+  echo "🔍 Checking $f"
+  if file "$f" | grep -q ELF; then
+    if ! file "$f" | grep -q "ARM aarch64"; then
+      echo "❌ Non-ARM64 engine binary: $f"
+      exit 1
+    fi
+  fi
+done
+' sh {} +
+echo '✅ All Flutter engine binaries are ARM64'
+
+# Strip unnecessary platforms
+rm -rf bin/cache/artifacts/engine/darwin-*
+rm -rf bin/cache/artifacts/engine/windows-*
+rm -rf bin/cache/artifacts/engine/linux-x64
+rm -rf bin/cache/artifacts/engine/fuchsia-*
+rm -rf bin/cache/artifacts/engine/ios-*
+
+# Package SDK
+tar -czf /workspace/flutter_linux_arm64_android_web_sdk.tar.gz flutter
+echo '✅ Super-lean ARM64 SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
+EOF
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
