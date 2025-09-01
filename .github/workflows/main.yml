@@ -54,36 +54,39 @@ jobs:
               echo '🔨 Preparing Flutter Web SDK'
               ./bin/flutter precache --web
 
-              # Verify Dart SDK binaries (multi-line loop)
+              # Dart SDK binaries
               echo '🔍 Verifying Dart SDK binaries are ARM64...'
               find bin/cache/dart-sdk/bin -type f -executable -exec sh -c '
               for f; do
-                echo \"🔍 Checking \$f\"
-                if file \"\$f\" | grep -q \"ELF\"; then
-                  if ! file \"\$f\" | grep -q \"ARM aarch64\"; then
-                    echo \"❌ Non-ARM64 Dart binary: \$f\"
+                if file "$f" | grep -q "ELF"; then
+                  echo "🔍 Checking ELF Dart binary $f"
+                  if ! file "$f" | grep -q "ARM aarch64"; then
+                    echo "❌ Non-ARM64 Dart binary: $f"
                     exit 1
                   fi
+                else
+                  echo "ℹ️ Skipping non-ELF Dart file: $f"
                 fi
               done
               ' sh {} +
-              echo '✅ All Dart SDK binaries are ARM64'
-
-              # Verify Flutter engine binaries (multi-line loop)
+              echo '✅ All Dart SDK ELF binaries are ARM64'
+              
+              # Flutter engine binaries
               echo '🔍 Verifying Flutter engine binaries are ARM64...'
               find bin/cache/artifacts/engine/linux-arm64 -type f -exec sh -c '
               for f; do
-                echo \"🔍 Checking \$f\"
-                if file \"\$f\" | grep -q \"ELF\"; then
-                  if ! file \"\$f\" | grep -q \"ARM aarch64\"; then
-                    echo \"❌ Non-ARM64 engine binary: \$f\"
+                if file "$f" | grep -q "ELF"; then
+                  echo "🔍 Checking ELF Flutter engine binary $f"
+                  if ! file "$f" | grep -q "ARM aarch64"; then
+                    echo "❌ Non-ARM64 Flutter engine binary: $f"
                     exit 1
                   fi
+                else
+                  echo "ℹ️ Skipping non-ELF Flutter engine file: $f"
                 fi
               done
               ' sh {} +
-              echo '✅ All Flutter engine binaries are ARM64'
-
+              echo '✅ All Flutter engine ELF binaries are ARM64'
               # Strip unnecessary platforms for lean SDK
               rm -rf bin/cache/artifacts/engine/darwin-*
               rm -rf bin/cache/artifacts/engine/windows-*
