@@ -84,4 +84,23 @@ jobs:
           zip -r9 ../flutter-arm64-full-sdk.zip .
 
       # Step 11: Verify final ZIP is fully ARM64
-      - name: 🟩 Verify ARM
+      - name: 🟩 Verify ARM64
+        run: |
+          unzip -q ../flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
+          find flutter-sdk-unzip -type f -exec file {} \; | grep "x86_64" && echo "ERROR: x64 binary found in ZIP!" && exit 1 || echo "ZIP is fully ARM64-native"
+
+      # Step 12: Generate SHA256 checksums
+      - name: 🟩 Generate SHA256 checksums
+        run: |
+          cd flutter-sdk-unzip
+          find . -type f -exec sha256sum {} \; > ../flutter-sdk-checksums.txt
+          echo "SHA256 checksums generated"
+
+      # Step 13: Upload artifact
+      - name: 🟩 Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-arm64-full-sdk
+          path: |
+            flutter-arm64-full-sdk.zip
+            flutter-sdk-checksums.txt
