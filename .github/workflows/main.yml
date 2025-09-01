@@ -47,10 +47,9 @@ jobs:
               echo '🔨 Preparing Flutter Web SDK artifacts'
               ./bin/flutter precache --web
               
-              # Build Android engines (all ABIs)
-              for ABI in arm arm64 x86 x64; do
-                echo '🔨 Building Android engine for ABI: '$ABI
-                ./bin/flutter build apk --release --target-platform=android-$ABI --build-shared-library
+              # Precache Android engine artifacts for all ABIs
+              echo '🔨 Downloading Android engine artifacts for all ABIs'
+              ./bin/flutter precache --android
               done
 
               # Verify host binaries are ARM64
