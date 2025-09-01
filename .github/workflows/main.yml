@@ -1,124 +1,77 @@
-name: Build Flutter SDK (ARM64 host, Android (all ABIs) + Web only, Lean)
+name: Build Flutter SDK (ARM64 Host, Android + Web only via QEMU)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-arm64-android-web:
-    runs-on: ubuntu-22.04  # ARM64 runner required
+  build-flutter-sdk:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git curl unzip xz-utils zip \
-            clang ninja-build pkg-config \
-            gcc g++ python3 cmake openjdk-17-jdk rsync
+      - name: Enable QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
-      - name: Clone Flutter (stable, latest)
-        run: |
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1
-          echo "✅ Flutter SDK cloned (stable)."
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Get matching engine commit
-        id: engine
+      - name: Build Flutter SDK inside ARM64 container
         run: |
-          ENGINE_HASH=$(cat flutter/bin/internal/engine.version)
-          echo "engine_hash=$ENGINE_HASH" >> $GITHUB_OUTPUT
-          echo "✅ Engine commit hash: $ENGINE_HASH"
+          docker run --rm --platform linux/arm64 \
+            -v $PWD:/workspace \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              
+              # Install deps
+              apt-get update
+              apt-get install -y git curl unzip xz-utils zip clang ninja-build pkg-config gcc g++ python3 cmake openjdk-17-jdk ca-certificates
+              update-ca-certificates
+              
+              echo '✅ Certificates ready'
 
-      - name: Checkout engine sources
-        run: |
-          git clone https://github.com/flutter/engine.git engine -b ${{ steps.engine.outputs.engine_hash }} --depth 1
-          echo "✅ Engine sources checked out."
+              # Clone Flutter SDK
+              git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+              cd flutter
 
-      - name: Build Linux ARM64 host engine (for tooling + Dart SDK + Web)
-        run: |
-          cd engine
-          ./flutter/tools/gn \
-            --unoptimized \
-            --target-os=linux \
-            --target-cpu=arm64 \
-            --full-dart-sdk \
-            --enable-web
-          ninja -C out/host_arm64
-          echo "✅ Linux ARM64 host engine built."
+              # Force download Dart SDK sources for ARM64 host
+              ./bin/cache/dart-sdk/bin/dart --version || true
+              echo '✅ Dart SDK bootstrapped'
 
-      - name: Build Android engines (all ABIs)
-        run: |
-          cd engine
-          for ABI in arm64 arm x86 x64; do
-            case $ABI in
-              arm)   ANDROID_CPU=arm ;;
-              arm64) ANDROID_CPU=arm64 ;;
-              x86)   ANDROID_CPU=x86 ;;
-              x64)   ANDROID_CPU=x64 ;;
-            esac
-            echo "🔨 Building Android $ANDROID_CPU engine..."
-            ./flutter/tools/gn \
-              --android \
-              --android-cpu=$ANDROID_CPU \
-              --unoptimized
-            ninja -C out/android_release_$ABI
-          done
-          echo "✅ All Android engines built."
+              # Build host artifacts (Linux ARM64)
+              echo '🔨 Building Flutter host artifacts (ARM64)'
+              ./bin/flutter --verbose --no-version-check doctor
 
-      - name: Verify host binaries are ARM64
-        run: |
-          echo "🔍 Verifying host binaries are ARM64..."
-          find engine/out/host_arm64 \
-            -type f \
-            -exec sh -c '
-              for f; do
-                if file "$f" | grep -q "ELF"; then
-                  if ! file "$f" | grep -q "ARM aarch64"; then
-                    echo "❌ Non-ARM64 host binary found: $f"
-                    file "$f"
-                    exit 1
-                  fi
-                fi
+              # Build Web SDK
+              echo '🔨 Building Web SDK'
+              ./bin/flutter build bundle --release --target-platform=web-server
+
+              # Build Android engines (all ABIs)
+              for ABI in arm arm64 x86 x64; do
+                echo '🔨 Building Android engine for ABI: '$ABI
+                ./bin/flutter build apk --release --target-platform=android-$ABI --build-shared-library
               done
-            ' sh {} +
-          echo "✅ Host binaries are pure ARM64."
 
-      - name: Assemble Lean SDK
-        run: |
-          mkdir -p flutter_arm64/bin/cache/artifacts/engine
-          
-          # Copy Dart SDK + Web SDK from host build
-          cp -r engine/out/host_arm64/flutter_patched_sdk \
-                flutter_arm64/bin/cache/artifacts/engine/dart-sdk
-          cp -r engine/out/host_arm64/gen/flutter_web_sdk \
-                flutter_arm64/bin/cache/artifacts/engine/web_sdk
-          
-          # Copy Android engines for all ABIs
-          cp -r engine/out/android_release_arm64 flutter_arm64/bin/cache/artifacts/engine/android-arm64
-          cp -r engine/out/android_release_arm   flutter_arm64/bin/cache/artifacts/engine/android-arm
-          cp -r engine/out/android_release_x86   flutter_arm64/bin/cache/artifacts/engine/android-x86
-          cp -r engine/out/android_release_x64   flutter_arm64/bin/cache/artifacts/engine/android-x64
-          
-          # Copy Flutter CLI/tools without extra artifacts
-          rsync -av \
-            --exclude 'bin/cache/artifacts/engine/*' \
-            --exclude 'bin/cache/artifacts/gradle_wrapper' \
-            --exclude 'bin/cache/artifacts/ios-deploy' \
-            --exclude 'bin/cache/artifacts/darwin-*' \
-            --exclude 'bin/cache/artifacts/windows-*' \
-            --exclude 'bin/cache/artifacts/linux-*' \
-            flutter/ flutter_arm64/
-          
-          # Clean out unwanted platforms
-          rm -rf flutter_arm64/bin/cache/artifacts/engine/{darwin-*,windows-*,linux-*} || true
-          
-          # Ensure no stray x64 host leaks
-          find flutter_arm64 -type f -exec file {} \; | grep -E 'x86-64|i386' && exit 1 || echo "✅ No unwanted x64 host binaries."
-          
-          tar -czf flutter_android_all_web_arm64_host_sdk.tar.gz flutter_arm64
-          echo "✅ Super-lean SDK packaged."
+              # Verify host binaries are ARM64
+              echo '🔍 Verifying host binaries are ARM64'
+              find bin/cache/dart-sdk/bin -type f -exec file {} \; | grep ELF | grep -v 'ARM aarch64' && { echo '❌ Non-ARM64 host binary found'; exit 1; } || echo '✅ All host binaries are ARM64'
+
+              # Strip unnecessary platforms to make it lean
+              rm -rf bin/cache/artifacts/engine/darwin-*
+              rm -rf bin/cache/artifacts/engine/windows-*
+              rm -rf bin/cache/artifacts/engine/linux-x64
+              rm -rf bin/cache/artifacts/engine/fuchsia-*
+              rm -rf bin/cache/artifacts/engine/ios-*
+
+              # Package SDK
+              cd ..
+              tar -czf flutter_linux_arm64_android_web_sdk.tar.gz flutter
+              echo '✅ Super-lean ARM64 SDK packaged'
+            "
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flutter_android_all_web_arm64_host_sdk
-          path: flutter_android_all_web_arm64_host_sdk.tar.gz
+          name: flutter_linux_arm64_android_web_sdk
+          path: flutter_linux_arm64_android_web_sdk.tar.gz
