@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install deps
+      - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -37,13 +37,13 @@ jobs:
       - name: Build host engine (ARM64, includes Web SDK)
         run: |
           cd flutter/engine
-          ./flutter/tools/gn --unoptimized --target-os=linux --target-cpu=arm64 --full-dart-sdk
+          ./tools/gn --unoptimized --target-os=linux --target-cpu=arm64 --full-dart-sdk
           ninja -C out/arm64_release
 
       - name: Build Android ARM64 engine
         run: |
           cd flutter/engine
-          ./flutter/tools/gn --android --android-cpu=arm64 --unoptimized
+          ./tools/gn --android --android-cpu=arm64 --unoptimized
           ninja -C out/android_release_arm64
 
       - name: Verify all binaries are ARM64
