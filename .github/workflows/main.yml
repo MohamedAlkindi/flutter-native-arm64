@@ -28,28 +28,28 @@ jobs:
           ENGINE_HASH=$(cat flutter/bin/internal/engine.version)
           echo "engine_hash=$ENGINE_HASH" >> $GITHUB_OUTPUT
 
-      - name: Clone engine sources
+      - name: Checkout engine sources from monorepo
         run: |
-          git clone https://github.com/flutter/engine.git engine
-          cd engine
+          cd flutter
+          git fetch origin ${{ steps.engine.outputs.engine_hash }}
           git checkout ${{ steps.engine.outputs.engine_hash }}
 
       - name: Build host engine (ARM64, includes Web SDK)
         run: |
-          cd engine
+          cd flutter/engine
           ./flutter/tools/gn --unoptimized --target-os=linux --target-cpu=arm64 --full-dart-sdk
           ninja -C out/arm64_release
 
       - name: Build Android ARM64 engine
         run: |
-          cd engine
+          cd flutter/engine
           ./flutter/tools/gn --android --android-cpu=arm64 --unoptimized
           ninja -C out/android_release_arm64
+
       - name: Verify all binaries are ARM64
         run: |
           echo "Verifying ARM64 architecture..."
-          # Find all ELF binaries in the engine output
-          find flutter_arm64/bin/cache/artifacts/engine \
+          find flutter/engine/out/arm64_release flutter/engine/out/android_release_arm64 \
             -type f \
             -exec sh -c '
               for f; do
@@ -63,14 +63,12 @@ jobs:
               done
             ' sh {} +
           echo "✅ All ELF binaries are ARM64."
+
       - name: Package SDK (Android + Web only)
         run: |
           mkdir -p flutter_arm64/bin/cache/artifacts/engine
-          # Host (includes web)
-          cp -r engine/out/arm64_release flutter_arm64/bin/cache/artifacts/engine/linux-arm64
-          # Android ARM64
-          cp -r engine/out/android_release_arm64 flutter_arm64/bin/cache/artifacts/engine/android-arm64
-          # Copy Flutter framework
+          cp -r flutter/engine/out/arm64_release flutter_arm64/bin/cache/artifacts/engine/linux-arm64
+          cp -r flutter/engine/out/android_release_arm64 flutter_arm64/bin/cache/artifacts/engine/android-arm64
           cp -r flutter/* flutter_arm64/
           tar -czf flutter_linux_arm64_android_web_sdk.tar.gz flutter_arm64
 
