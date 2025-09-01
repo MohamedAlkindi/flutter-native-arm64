@@ -1,0 +1,83 @@
+name: Verify ARM64 Flutter SDK Artifact
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-sdk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enable QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download latest Flutter SDK artifact from previous run
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter_linux_arm64_android_web_sdk
+          path: ./artifact
+
+      - name: Verify Flutter SDK inside ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v $PWD/artifact:/workspace \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+
+              echo '🔧 Installing necessary tools...'
+              apt-get update
+              apt-get install -y file unzip ca-certificates
+
+              echo '📦 Extracting SDK...'
+              tar -xzf flutter_linux_arm64_android_web_sdk.tar.gz
+              cd flutter
+
+              echo '🔍 Verifying host binaries are ARM64...'
+              find bin/cache/dart-sdk/bin bin/cache/artifacts/engine/linux-arm64 \
+                   -type f -executable \
+                   -exec sh -c '
+                     for f; do
+                       if file \"$f\" | grep -q \"ELF\"; then
+                         if ! file \"$f\" | grep -q \"ARM aarch64\"; then
+                           echo \"❌ Non-ARM64 host binary found: $f\"
+                           file \"$f\"
+                           exit 1
+                         fi
+                       fi
+                     done
+                   ' sh {} +
+              echo '✅ All host binaries are ARM64'
+
+              echo '🔍 Verifying Android engine artifacts for all ABIs...'
+              for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+                if [ ! -d bin/cache/artifacts/engine/android-\$abi ]; then
+                  echo \"❌ Missing Android engine for \$abi\"
+                  exit 1
+                fi
+              done
+              echo '✅ All Android ABIs present'
+
+              echo '🔍 Verifying Web SDK...'
+              if [ ! -d bin/cache/flutter_web_sdk ]; then
+                echo '❌ Web SDK missing'
+                exit 1
+              fi
+              echo '✅ Web SDK present'
+
+              echo '🔍 Checking engine snapshots (.so and .snapshot) for ARM64...'
+              for f in bin/cache/artifacts/engine/linux-arm64/*.so bin/cache/artifacts/engine/linux-arm64/*.snapshot; do
+                if ! file \"$f\" | grep -q 'ARM aarch64'; then
+                  echo \"❌ Non-ARM64 snapshot/engine: $f\"
+                  exit 1
+                fi
+              done
+              echo '✅ All engine snapshots are ARM64'
+
+              echo '🎉 All checks passed! Flutter SDK artifact is valid for Linux ARM64.'
+            "
