@@ -20,12 +20,13 @@ jobs:
 
       - name: Download Dart SDK ARM64
         run: |
-          DART_VER=$(curl -s "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/VERSION" | jq -r '.revision')
+          DART_VER=$(curl -s "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/VERSION" | jq -r '.version')
           wget -O dart-sdk-arm64.zip "https://storage.googleapis.com/dart-archive/channels/stable/release/$DART_VER/linux-arm64/dart-sdk.zip"
           unzip -o dart-sdk-arm64.zip -d flutter/bin/cache/
           mv flutter/bin/cache/dart-sdk flutter/bin/cache/dart-sdk-arm64
           rm dart-sdk-arm64.zip
           mv flutter/bin/cache/dart-sdk-arm64 flutter/bin/cache/dart-sdk
+
       
       - name: Configure Flutter with ARM64 Dart SDK
         run: |
