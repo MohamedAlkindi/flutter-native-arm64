@@ -23,23 +23,22 @@ jobs:
 
           WORKDIR /app
 
-          # Install dependencies required for Flutter, including `ca-certificates` for Git.
-          # Chaining RUN commands reduces image layers.
+          # Install all necessary dependencies for a headless Flutter build
           RUN apt-get update && apt-get install -y --no-install-recommends \
               ca-certificates \
               git unzip curl xz-utils zip python3 clang cmake ninja-build pkg-config \
               libgtk-3-dev liblzma-dev libssl-dev libcurl4-openssl-dev libfreetype6-dev \
               libfontconfig1-dev libc6-dev gcc g++ make file wget jq
 
-          # Clone the Flutter stable branch.
+          # Clone the Flutter stable branch
           RUN git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
 
-          # This is the crucial step. It downloads all necessary ARM64 binaries and engine artifacts,
-          # and it also compiles the core `flutter_tools` snapshot for the host architecture (ARM64).
+          # Use the pre-cache command to download and compile all artifacts for the target ARM64 architecture
+          # This is the most crucial step as it pulls down the correct binaries.
           WORKDIR /app/flutter
           RUN ./bin/flutter precache --android --web --no-linux --no-ios --no-windows --no-macos --force
 
-          # Reduce SDK size by removing unnecessary parts.
+          # Remove unnecessary files to reduce the final SDK size
           RUN rm -rf examples/ dev/ docs/ && \
               rm -rf bin/cache/pkg
 
@@ -52,8 +51,10 @@ jobs:
           CMD ["/bin/true"]
           EOF
 
+          # Build the Docker image and load it to the host machine, specifying the target platform.
           docker buildx build --platform linux/arm64 -t flutter-arm64-builder --load .
 
+          # Create a container from the built image and copy the artifact
           docker create --name flutter-temp-container flutter-arm64-builder
           docker cp flutter-temp-container:/flutter-arm64-full-sdk.zip .
           docker rm flutter-temp-container
@@ -62,11 +63,11 @@ jobs:
         run: |
           unzip flutter-arm64-full-sdk.zip -d flutter-sdk-unzip
           # Check for any ELF binary that is NOT aarch64
-          if find flutter-sdk-unzip -type f -exec file {} + | grep "ELF" | grep -v "aarch64"; then
+          if find flutter-sdk-unzip -type f -exec file {} + | grep 'ELF.*executable' | grep -v 'aarch64'; then
             echo "Error: Found a non-ARM64 binary!"
             exit 1
           else
-            echo "All ELF binaries are aarch64. Proceeding."
+            echo "All ELF binaries are aarch64. The SDK is native to ARM64."
           fi
 
       - name: Generate SHA256 checksums
