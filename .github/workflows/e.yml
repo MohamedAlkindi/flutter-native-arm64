@@ -1,0 +1,65 @@
+name: Fetch Flutter Android Snapshot Only (ARM64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch-snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enable QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Fetch Flutter snapshot inside ARM64 container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v $PWD:/workspace \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              #!/bin/bash
+              set -o pipefail
+
+              # Install minimal dependencies
+              apt-get update
+              apt-get install -y git curl unzip xz-utils zip openjdk-17-jdk ca-certificates file
+              update-ca-certificates
+
+              # Clean old Flutter clone if exists
+              rm -rf flutter
+
+              # Clone specific Flutter version (3.35.2 stable)
+              git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+              cd flutter
+
+              # Force download Android engine snapshot only
+              ./bin/flutter precache --android --no-telemetry --force
+
+              # Identify the needed snapshot
+              SNAPSHOT_FILE=\"bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot\"
+
+              if [ -f \"\$SNAPSHOT_FILE\" ]; then
+                # Verify it's a snapshot (not ELF)
+                if file \"\$SNAPSHOT_FILE\" | grep -q 'snapshot'; then
+                  echo \"✅ Verified snapshot: \$SNAPSHOT_FILE\"
+                  cp \"\$SNAPSHOT_FILE\" /workspace/
+                else
+                  echo \"❌ Not a snapshot: \$SNAPSHOT_FILE\"
+                  exit 1
+                fi
+              else
+                echo \"❌ Snapshot file not found: \$SNAPSHOT_FILE\"
+                exit 1
+              fi
+            "
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend_server_aot.dart.snapshot
+          path: frontend_server_aot.dart.snapshot
