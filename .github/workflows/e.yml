@@ -5,52 +5,66 @@ on:
 
 jobs:
   fetch-snapshot:
-    runs-on: self-hosted
-    # Ensure your self-hosted runner is a native ARM64 machine (e.g., Apple M1/M2, Raspberry Pi)
-    # The runner must also have Docker, Git, and a compatible shell installed.
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Fetch Flutter snapshot on native ARM64 host
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Enable QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Fetch Flutter ARM64 snapshot inside container
+        id: fetch-snapshot
         run: |
-          # The script is designed to run directly on the self-hosted ARM64 runner.
           set -e
           
-          # Use a temporary directory to avoid conflicts with other jobs
-          TEMP_DIR=$(mktemp -d)
-          cd "$TEMP_DIR"
+          # Create a working directory for our script
+          mkdir -p ./.tmp && cd ./.tmp
 
-          echo "🚀 Cloning the Flutter SDK repository to $TEMP_DIR..."
-          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ./flutter_sdk
+          # We use a Docker container to ensure a clean, controlled environment
+          # and to leverage the QEMU emulation.
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              
+              # Install necessary dependencies
+              apt-get update && apt-get install -y curl unzip git file ca-certificates
 
-          # Set up the Flutter environment variables for the current shell session
-          export PATH="$PATH:$TEMP_DIR/flutter_sdk/bin"
+              # Download the Flutter SDK
+              git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /usr/local/flutter
+              export PATH=\"/usr/local/flutter/bin:\$PATH\"
 
-          echo "📦 Pre-caching artifacts for Linux ARM64..."
-          # This command will download the specific frontend_server.aot.dart.snapshot
-          # and other necessary artifacts for the arm64 architecture.
-          flutter precache --linux-arm64
+              # This is the key step: it downloads the pre-built ARM64 artifacts.
+              flutter precache --linux-arm64
 
-          # Define the exact path to the snapshot file
-          SNAPSHOT_FILE="$TEMP_DIR/flutter_sdk/bin/cache/artifacts/engine/linux-arm64/frontend_server.aot.dart.snapshot"
+              # Define the exact path to the snapshot file
+              SNAPSHOT_PATH=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server.aot.dart.snapshot
 
-          # Verify that the file was successfully downloaded and exists
-          if [ ! -f "$SNAPSHOT_FILE" ]; then
-            echo "❌ The snapshot file was not found after precaching."
-            exit 1
-          fi
+              # Verify the file exists and is not empty.
+              if [ ! -f \"\$SNAPSHOT_PATH\" ]; then
+                echo \"❌ Snapshot file was not found after precaching.\"
+                exit 1
+              fi
 
-          echo "🔍 Analyzing the snapshot file..."
-          # The 'file' command is a great way to verify the file type and architecture.
-          file "$SNAPSHOT_FILE"
-          
-          echo "✅ Snapshot successfully downloaded and verified."
+              # Check file type and architecture
+              echo \"🔍 Verifying snapshot file...\"
+              file \"\$SNAPSHOT_PATH\"
 
-          # Copy the snapshot to a known location for the next step.
-          cp "$SNAPSHOT_FILE" /home/runner/work/frontend_server.aot.dart.snapshot
-        
+              # Copy the snapshot to a location accessible by the host runner
+              cp \"\$SNAPSHOT_PATH\" /workspace/frontend_server.aot.dart.snapshot
+            "
+
+          # Use a variable to make the path to the snapshot explicit for the next step.
+          echo "snapshot_path=./.tmp/frontend_server.aot.dart.snapshot" >> "$GITHUB_OUTPUT"
+
       - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend_server_aot_snapshot
-          path: /home/runner/work/frontend_server.aot.dart.snapshot
+          path: ${{ steps.fetch-snapshot.outputs.snapshot_path }}
           retention-days: 7
