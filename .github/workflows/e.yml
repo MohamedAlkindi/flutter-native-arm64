@@ -16,51 +16,42 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Fetch Flutter ARM64 snapshot inside container
+      - name: Fetch only frontend_server_aot snapshot
         id: fetch-snapshot
         run: |
-          set -e
-          
-          # Create a working directory for our script
           mkdir -p ./.tmp && cd ./.tmp
 
-          # We use a Docker container to ensure a clean, controlled environment
-          # and to leverage the QEMU emulation.
           docker run --rm --platform linux/arm64 \
             -v "$PWD:/workspace" \
             -w /workspace \
             arm64v8/ubuntu:22.04 bash -c "
-              set -e
+              # Minimal dependencies
+              apt-get update && apt-get install -y git curl unzip ca-certificates file xz-utils
+
+              # Clone Flutter SDK (3.35.2)
+              git clone --depth 1 --branch 3.35.2 https://github.com/flutter/flutter.git flutter
+              export PATH=\"/workspace/flutter/bin:\$PATH\"
+
+              # Trigger snapshot generation via flutter tool
+              flutter --version  # this triggers minimal setup
               
-              # Install necessary dependencies
-              apt-get update && apt-get install -y curl unzip git file ca-certificates
+              # Path to the snapshot
+              SNAPSHOT=/workspace/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
 
-              # Download the Flutter SDK
-              git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /usr/local/flutter
-              export PATH=\"/usr/local/flutter/bin:\$PATH\"
-
-              # This is the key step: it downloads the pre-built ARM64 artifacts.
-              flutter precache --linux
-
-              # Define the exact path to the snapshot file
-              SNAPSHOT_PATH=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server.aot.dart.snapshot
-
-              # Verify the file exists and is not empty.
-              if [ ! -f \"\$SNAPSHOT_PATH\" ]; then
-                echo \"❌ Snapshot file was not found after precaching.\"
+              if [ ! -f \"\$SNAPSHOT\" ]; then
+                echo '❌ Snapshot file was not generated!'
                 exit 1
               fi
 
-              # Check file type and architecture
-              echo \"🔍 Verifying snapshot file...\"
-              file \"\$SNAPSHOT_PATH\"
+              # Verify snapshot
+              echo '🔍 Snapshot info:'
+              file \"\$SNAPSHOT\"
 
-              # Copy the snapshot to a location accessible by the host runner
-              cp \"\$SNAPSHOT_PATH\" /workspace/frontend_server.aot.dart.snapshot
+              # Copy to workspace root for upload
+              cp \"\$SNAPSHOT\" /workspace/frontend_server_aot.dart.snapshot
             "
 
-          # Use a variable to make the path to the snapshot explicit for the next step.
-          echo "snapshot_path=./.tmp/frontend_server.aot.dart.snapshot" >> "$GITHUB_OUTPUT"
+          echo "snapshot_path=./.tmp/frontend_server_aot.dart.snapshot" >> "$GITHUB_OUTPUT"
 
       - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
