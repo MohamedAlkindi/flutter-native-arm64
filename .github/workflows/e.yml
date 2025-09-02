@@ -1,95 +1,99 @@
-name: Flutter ARM64 Build
+name: Flutter ARM64 Engine Artifacts
 
 on:
   workflow_dispatch:
 
 jobs:
-  flutter_build:
+  fetch-flutter-arm64:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Install system dependencies
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl unzip git wget tar file python3
-
-      # 3. Install OpenJDK 17
-      - name: Install Java
-        run: |
-          sudo apt-get install -y openjdk-17-jdk
-          java -version
-
-      # 4. Install Android SDK
-      - name: Install Android SDK
-        run: |
-          mkdir -p /opt/android-sdk/cmdline-tools
-          cd /opt/android-sdk
-          curl -o commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools.zip -d cmdline-tools/temp
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/temp/* cmdline-tools/latest/
-          rm commandlinetools.zip
-          echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> $GITHUB_ENV
-          echo "PATH=/opt/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
-
-      # 5. Accept Android licenses
-      - name: Accept Android Licenses
-        run: |
-          yes | sdkmanager --licenses
-
-      # 6. Install Android SDK Platforms and Tools
-      - name: Install Platforms and Tools
-        run: |
-          sdkmanager "platform-tools" "platforms;android-36" "ndk;25.2.9519653" "cmake;3.22.1"
-
-      # 7. Install Gradle
-      - name: Install Gradle
-        uses: gradle/gradle-build-action@v2
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
         with:
-          gradle-version: 8.3
+          platforms: arm64
 
-      # 8. Install Flutter 3.35.2
-      - name: Install Flutter
+      - name: Pull ARM64 Ubuntu container
+        run: docker pull arm64v8/ubuntu:22.04
+
+      - name: Create working directories
         run: |
-          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /opt/flutter
-          echo "/opt/flutter/bin" >> $GITHUB_PATH
-          flutter doctor -v
+          mkdir -p /tmp/flutter-sdk
+          mkdir -p /tmp/flutter-arm64
 
-      # 9. Create a sample Flutter project
-      - name: Create Sample Project
+      - name: Install dependencies inside container
         run: |
-          flutter create sample_project
-          cd sample_project
+          docker run --rm \
+            -v /tmp/flutter-sdk:/usr/local/flutter \
+            -v /tmp/flutter-arm64:/workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              apt-get update
+              apt-get install -y curl unzip git xz-utils file ca-certificates openjdk-11-jdk cmake ninja-build
+            "
 
-      # 10. Get dependencies
-      - name: Flutter Pub Get
+      - name: Clone Flutter 3.35.2 SDK
         run: |
-          cd sample_project
-          flutter pub get
+          docker run --rm \
+            -v /tmp/flutter-sdk:/usr/local/flutter \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /usr/local/flutter
+            "
 
-      # 11. Build APK
-      - name: Build APK
+      - name: Precache Linux artifacts
         run: |
-          cd sample_project
-          flutter build apk
+          docker run --rm \
+            -v /tmp/flutter-sdk:/usr/local/flutter \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              export PATH=/usr/local/flutter/bin:\$PATH
+              flutter doctor
+              flutter precache --linux
+            "
 
-      # 12. Verify snapshots
-      - name: Verify Snapshots
+      - name: Verify and copy ARM64 engine artifacts
         run: |
-          file /opt/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-          ls -lh /opt/flutter/bin/cache/artifacts/engine/linux-arm64/
+          docker run --rm \
+            -v /tmp/flutter-sdk:/usr/local/flutter \
+            -v /tmp/flutter-arm64:/workspace \
+            arm64v8/ubuntu:22.04 bash -c "
+              set -e
+              ARTIFACTS_DIR=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64
+              FILES=(
+                frontend_server_aot.dart.snapshot
+                const_finder.dart.snapshot
+                gen_snapshot
+                flutter_tester
+                impellerc
+                libpath_ops.so
+                libtessellator.so
+                isolate_snapshot.bin
+                vm_isolate_snapshot.bin
+              )
+              for f in \"\${FILES[@]}\"; do
+                if [ ! -f \"\$ARTIFACTS_DIR/\$f\" ]; then
+                  echo \"❌ Missing artifact: \$f\"
+                  ls -la \$ARTIFACTS_DIR
+                  exit 1
+                fi
+                ARCH=\$(file \"\$ARTIFACTS_DIR/\$f\" | grep -o 'aarch64')
+                if [ \"\$ARCH\" != \"aarch64\" ]; then
+                  echo \"❌ Invalid architecture for \$f: not ARM64\"
+                  exit 1
+                fi
+                echo \"✅ Verified ARM64: \$f\"
+                cp \"\$ARTIFACTS_DIR/\$f\" /workspace/
+              done
+            "
 
-      # 13. Upload snapshot and APK as artifacts
-      - name: Upload Artifacts
+      - name: Upload verified ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: flutter_build_outputs
-          path: |
-            /opt/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-            sample_project/build/app/outputs/flutter-apk/app-release.apk
+          name: flutter_arm64_artifacts
+          path: /tmp/flutter-arm64/*
           retention-days: 7
