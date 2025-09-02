@@ -1,65 +1,65 @@
-name: Build Flutter ARM64 Snapshots
+name: Flutter ARM64 Full Build
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-arm64-snapshot:
+  flutter-build:
     runs-on: ubuntu-latest
 
+    env:
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      ANDROID_HOME: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      PATH: ${{ runner.temp }}/android-sdk/cmdline-tools/latest/bin:${{ runner.temp }}/android-sdk/platform-tools:${{ runner.temp }}/android-sdk/emulator:$PATH
+
     steps:
-      # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Enable QEMU for ARM64 emulation
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      # Step 3: Prepare ARM64 Docker environment
-      - name: Create ARM64 container
+      - name: Install system dependencies
         run: |
-          mkdir -p ./.tmp
-          cd ./.tmp
-          docker run --rm --platform linux/arm64 -v "$PWD:/workspace" -w /workspace ubuntu:22.04 bash -c "
-            set -e
-            apt-get update && apt-get install -y curl git unzip xz-utils file sudo openjdk-17-jdk
+          sudo apt-get update
+          sudo apt-get install -y curl unzip git xz-utils openjdk-11-jdk build-essential cmake
 
-            # Step 4: Clone Flutter 3.35.2
-            git clone --branch 3.35.2 --depth 1 https://github.com/flutter/flutter.git /usr/local/flutter
-            export PATH=\"/usr/local/flutter/bin:\$PATH\"
+      - name: Setup Android SDK
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          curl -o commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip commandlinetools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-36" "ndk;25.2.9519653" "cmake;3.22.1"
 
-            # Step 5: Verify Flutter
-            flutter --version
+      - name: Download Flutter 3.35.2 (ARM64)
+        run: |
+          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ${{ runner.temp }}/flutter
+          export PATH="${{ runner.temp }}/flutter/bin:$PATH"
+          flutter doctor
 
-            # Step 6: Create sample project
-            flutter create sample_project
-            cd sample_project
+      - name: Create sample Flutter project
+        run: |
+          flutter create sample_app
+          cd sample_app
 
-            # Step 7: Fetch dependencies
-            flutter pub get
+      - name: Get Flutter dependencies
+        run: |
+          cd sample_app
+          flutter pub get
 
-            # Step 8: Build APK (simple build, no target)
-            flutter build apk
+      - name: Build APK (default)
+        run: |
+          cd sample_app
+          flutter build apk
 
-            # Step 9: Verify snapshot files
-            SNAPSHOT=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-            if [ ! -f \"\$SNAPSHOT\" ]; then
-              echo '❌ Snapshot not found!'
-              exit 1
-            fi
-            file \$SNAPSHOT
+      - name: Verify generated snapshots
+        run: |
+          file ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
+          ls -lh ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64
 
-            # Step 10: Copy snapshot to workspace
-            cp \$SNAPSHOT /workspace/frontend_server_aot.dart.snapshot
-          "
-
-      # Step 11: Upload snapshot artifact
-      - name: Upload snapshot
+      - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend_server_aot_snapshot
-          path: ./.tmp/frontend_server_aot.dart.snapshot
+          path: ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
           retention-days: 7
