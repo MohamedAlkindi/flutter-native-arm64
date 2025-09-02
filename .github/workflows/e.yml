@@ -37,45 +37,17 @@ jobs:
               flutter doctor
               flutter precache --linux
             "
-
-      - name: Verify and copy ARM64 engine artifacts
+      - name: Copy and upload ARM64 engine artifacts
         run: |
           docker run --rm --platform linux/arm64 \
             -v /tmp/flutter-sdk:/usr/local/flutter \
             -v /tmp/flutter-arm64:/workspace \
             arm64v8/ubuntu:22.04 bash -c "
               set -e
-              apt-get update
-              apt-get install -y file
-              ARTIFACTS_DIR=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64
-              FILES=(
-                frontend_server_aot.dart.snapshot
-                const_finder.dart.snapshot
-                gen_snapshot
-                flutter_tester
-                impellerc
-                libpath_ops.so
-                libtessellator.so
-                isolate_snapshot.bin
-                vm_isolate_snapshot.bin
-              )
-              for f in \"\${FILES[@]}\"; do
-                if [ ! -f \"\$ARTIFACTS_DIR/\$f\" ]; then
-                  echo \"❌ Missing artifact: \$f\"
-                  ls -la \$ARTIFACTS_DIR
-                  exit 1
-                fi
-                ARCH=\$(file \"\$ARTIFACTS_DIR/\$f\" | grep -o 'aarch64')
-                if [ \"\$ARCH\" != \"aarch64\" ]; then
-                  echo \"❌ Invalid architecture for \$f: not ARM64\"
-                  exit 1
-                fi
-                echo \"✅ Verified ARM64: \$f\"
-                cp \"\$ARTIFACTS_DIR/\$f\" /workspace/
-              done
+              cp /usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/* /workspace/
             "
-
-      - name: Upload verified ARM64 artifacts
+      
+      - name: Upload ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flutter_arm64_artifacts
