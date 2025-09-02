@@ -40,7 +40,7 @@ jobs:
               export PATH=\"/usr/local/flutter/bin:\$PATH\"
 
               # This is the key step: it downloads the pre-built ARM64 artifacts.
-              flutter precache --linux-arm64
+              flutter precache --linux
 
               # Define the exact path to the snapshot file
               SNAPSHOT_PATH=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server.aot.dart.snapshot
