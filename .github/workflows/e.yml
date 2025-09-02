@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  fetch-flutter-arm64:
+  fetch-arm64-artifacts:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,32 +22,16 @@ jobs:
           mkdir -p /tmp/flutter-sdk
           mkdir -p /tmp/flutter-arm64
 
-      - name: Install dependencies inside container
+      - name: Install dependencies & clone Flutter inside ARM64 container
         run: |
-          docker run --rm \
+          docker run --rm --platform linux/arm64 \
             -v /tmp/flutter-sdk:/usr/local/flutter \
             -v /tmp/flutter-arm64:/workspace \
             arm64v8/ubuntu:22.04 bash -c "
               set -e
               apt-get update
               apt-get install -y curl unzip git xz-utils file ca-certificates openjdk-11-jdk cmake ninja-build
-            "
-
-      - name: Clone Flutter 3.35.2 SDK
-        run: |
-          docker run --rm \
-            -v /tmp/flutter-sdk:/usr/local/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              set -e
               git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /usr/local/flutter
-            "
-
-      - name: Precache Linux artifacts
-        run: |
-          docker run --rm \
-            -v /tmp/flutter-sdk:/usr/local/flutter \
-            arm64v8/ubuntu:22.04 bash -c "
-              set -e
               export PATH=/usr/local/flutter/bin:\$PATH
               flutter doctor
               flutter precache --linux
@@ -55,7 +39,7 @@ jobs:
 
       - name: Verify and copy ARM64 engine artifacts
         run: |
-          docker run --rm \
+          docker run --rm --platform linux/arm64 \
             -v /tmp/flutter-sdk:/usr/local/flutter \
             -v /tmp/flutter-arm64:/workspace \
             arm64v8/ubuntu:22.04 bash -c "
