@@ -9,9 +9,9 @@ jobs:
 
     env:
       JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
-      ANDROID_HOME: ${{ runner.temp }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-      PATH: ${{ runner.temp }}/android-sdk/cmdline-tools/latest/bin:${{ runner.temp }}/android-sdk/platform-tools:${{ runner.temp }}/android-sdk/emulator:$PATH
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/emulator:${{ github.workspace }}/flutter/bin:$PATH
 
     steps:
       - name: Checkout repository
@@ -33,33 +33,31 @@ jobs:
 
       - name: Download Flutter 3.35.2 (ARM64)
         run: |
-          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ${{ runner.temp }}/flutter
-          export PATH="${{ runner.temp }}/flutter/bin:$PATH"
-          flutter doctor
+          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ${{ github.workspace }}/flutter
+          flutter/bin/flutter doctor
 
       - name: Create sample Flutter project
         run: |
-          flutter create sample_app
-          cd sample_app
+          flutter/bin/flutter create sample_app
 
       - name: Get Flutter dependencies
         run: |
           cd sample_app
-          flutter pub get
+          ../flutter/bin/flutter pub get
 
       - name: Build APK (default)
         run: |
           cd sample_app
-          flutter build apk
+          ../flutter/bin/flutter build apk
 
       - name: Verify generated snapshots
         run: |
-          file ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-          ls -lh ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64
+          file flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
+          ls -lh flutter/bin/cache/artifacts/engine/linux-arm64
 
       - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend_server_aot_snapshot
-          path: ${{ runner.temp }}/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
+          path: flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
           retention-days: 7
