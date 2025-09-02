@@ -1,87 +1,65 @@
-name: Generate & Verify Flutter 3.35.2 ARM64 Snapshots
+name: Build Flutter ARM64 Snapshots
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-verify-snapshots:
+  build-arm64-snapshot:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup QEMU for ARM64
+      # Step 2: Enable QEMU for ARM64 emulation
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
-      - name: Create temporary workspace
-        run: mkdir -p ./.tmp
-
-      - name: Pull ARM64 Ubuntu Docker image
-        run: docker pull arm64v8/ubuntu:22.04
-
-      - name: Install dependencies inside Docker
+      # Step 3: Prepare ARM64 Docker environment
+      - name: Create ARM64 container
         run: |
-          docker run --rm --platform linux/arm64 \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            arm64v8/ubuntu:22.04 bash -c "
-              set -e
-              apt-get update
-              apt-get install -y git curl unzip xz-utils build-essential file openjdk-17-jdk
-            "
+          mkdir -p ./.tmp
+          cd ./.tmp
+          docker run --rm --platform linux/arm64 -v "$PWD:/workspace" -w /workspace ubuntu:22.04 bash -c "
+            set -e
+            apt-get update && apt-get install -y curl git unzip xz-utils file sudo openjdk-17-jdk
 
-      - name: Clone Flutter 3.35.2
-        run: |
-          docker run --rm --platform linux/arm64 \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            arm64v8/ubuntu:22.04 bash -c "
-              set -e
-              git clone --branch 3.35.2 --depth 1 https://github.com/flutter/flutter.git /usr/local/flutter
-            "
+            # Step 4: Clone Flutter 3.35.2
+            git clone --branch 3.35.2 --depth 1 https://github.com/flutter/flutter.git /usr/local/flutter
+            export PATH=\"/usr/local/flutter/bin:\$PATH\"
 
-      - name: Add Flutter to PATH
-        run: echo "/usr/local/flutter/bin" >> $GITHUB_PATH
+            # Step 5: Verify Flutter
+            flutter --version
 
-      - name: Verify Flutter version
-        run: flutter --version
+            # Step 6: Create sample project
+            flutter create sample_project
+            cd sample_project
 
-      - name: Create minimal Flutter project
-        run: flutter create ./.tmp/temp_project
+            # Step 7: Fetch dependencies
+            flutter pub get
 
-      - name: Install project dependencies
-        run: flutter pub get --project-dir ./.tmp/temp_project
+            # Step 8: Build APK (simple build, no target)
+            flutter build apk
 
-      - name: Build APK to generate snapshots
-        run: flutter build apk --project-dir ./.tmp/temp_project
-
-      - name: Verify snapshots exist
-        run: |
-          SNAPSHOTS=(const_finder.dart.snapshot frontend_server_aot.dart.snapshot isolate_snapshot.bin vm_isolate_snapshot.bin)
-          for SNAP in "${SNAPSHOTS[@]}"; do
-            FILE="/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/$SNAP"
-            if [ ! -f "$FILE" ]; then
-              echo "❌ Snapshot $SNAP missing!"
+            # Step 9: Verify snapshot files
+            SNAPSHOT=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
+            if [ ! -f \"\$SNAPSHOT\" ]; then
+              echo '❌ Snapshot not found!'
               exit 1
-            else
-              echo "✅ Found $SNAP"
             fi
-          done
+            file \$SNAPSHOT
 
-      - name: List snapshots with details
-        run: |
-          ls -lh /usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/*.dart.snapshot
-          file /usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/*.dart.snapshot
+            # Step 10: Copy snapshot to workspace
+            cp \$SNAPSHOT /workspace/frontend_server_aot.dart.snapshot
+          "
 
-      - name: Copy snapshots to workspace
-        run: cp /usr/local/flutter/bin/cache/artifacts/engine/linux-arm64/*.dart.snapshot ./.tmp/
-
-      - name: Upload snapshot artifacts
+      # Step 11: Upload snapshot artifact
+      - name: Upload snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: flutter_arm64_snapshots
-          path: ./.tmp/*.dart.snapshot
+          name: frontend_server_aot_snapshot
+          path: ./.tmp/frontend_server_aot.dart.snapshot
           retention-days: 7
