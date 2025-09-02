@@ -22,7 +22,7 @@ jobs:
           mkdir -p /tmp/flutter-sdk
           mkdir -p /tmp/flutter-arm64
 
-      - name: Install dependencies & clone Flutter inside ARM64 container
+      - name: Install dependencies & clone Flutter SDK
         run: |
           docker run --rm --platform linux/arm64 \
             -v /tmp/flutter-sdk:/usr/local/flutter \
@@ -31,6 +31,7 @@ jobs:
               set -e
               apt-get update
               apt-get install -y curl unzip git xz-utils file ca-certificates openjdk-11-jdk cmake ninja-build
+              git config --global --add safe.directory /usr/local/flutter
               git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /usr/local/flutter
               export PATH=/usr/local/flutter/bin:\$PATH
               flutter doctor
