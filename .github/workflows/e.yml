@@ -45,6 +45,8 @@ jobs:
             -v /tmp/flutter-arm64:/workspace \
             arm64v8/ubuntu:22.04 bash -c "
               set -e
+              apt-get update
+              apt-get install -y file
               ARTIFACTS_DIR=/usr/local/flutter/bin/cache/artifacts/engine/linux-arm64
               FILES=(
                 frontend_server_aot.dart.snapshot
