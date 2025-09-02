@@ -1,63 +1,96 @@
-name: Flutter ARM64 Full Build
+name: Generate and Upload Flutter ARM64 Snapshots
 
 on:
   workflow_dispatch:
 
 jobs:
-  flutter-build:
+  build-arm64-snapshots:
     runs-on: ubuntu-latest
 
-    env:
-      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:${{ github.workspace }}/android-sdk/emulator:${{ github.workspace }}/flutter/bin:$PATH
-
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl unzip git xz-utils openjdk-11-jdk build-essential cmake
+      # 2️⃣ Setup QEMU for ARM64 emulation
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
-      - name: Setup Android SDK
+      # 3️⃣ Run ARM64 Ubuntu container
+      - name: Run ARM64 environment
         run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-          curl -o commandlinetools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "ndk;25.2.9519653" "cmake;3.22.1"
+          docker run --rm --platform linux/arm64 -v "$PWD:/workspace" -w /workspace arm64v8/ubuntu:22.04 bash -c "
+            set -e
 
-      - name: Download Flutter 3.35.2 (ARM64)
-        run: |
-          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ${{ github.workspace }}/flutter
-          flutter/bin/flutter doctor
+            # 4️⃣ Install dependencies
+            apt-get update
+            apt-get install -y curl unzip git xz-utils ca-certificates openjdk-17-jdk cmake gradle wget unzip
 
-      - name: Create sample Flutter project
-        run: |
-          flutter/bin/flutter create sample_app
+            # Set Android SDK variables
+            ANDROID_SDK_ROOT=/opt/android-sdk
+            mkdir -p \$ANDROID_SDK_ROOT
+            export ANDROID_HOME=\$ANDROID_SDK_ROOT
+            export PATH=\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tools:\$PATH
 
-      - name: Get Flutter dependencies
-        run: |
-          cd sample_app
-          ../flutter/bin/flutter pub get
+            # Download Android SDK command line tools
+            wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+            unzip cmdline-tools.zip -d \$ANDROID_HOME
+            mv \$ANDROID_HOME/cmdline-tools \$ANDROID_HOME/cmdline-tools/latest
 
-      - name: Build APK (default)
-        run: |
-          cd sample_app
-          ../flutter/bin/flutter build apk
+            # Accept licenses
+            yes | sdkmanager --licenses
 
-      - name: Verify generated snapshots
-        run: |
-          file flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-          ls -lh flutter/bin/cache/artifacts/engine/linux-arm64
+            # Install platform, build-tools, ndk, cmake
+            sdkmanager \"platforms;android-36\" \"build-tools;36.0.0\" \"ndk;25.2.9519653\" \"cmake;3.25.1\" 
 
-      - name: Upload snapshot artifact
+            # 5️⃣ Download Flutter 3.35.2
+            git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 /opt/flutter
+            export PATH=/opt/flutter/bin:\$PATH
+
+            flutter doctor -v
+
+            # 6️⃣ Create minimal Flutter project
+            flutter create temp_app
+            cd temp_app
+
+            # 7️⃣ Fetch dependencies
+            flutter pub get
+
+            # 8️⃣ Build APK (default, ARM64)
+            flutter build apk
+
+            # 9️⃣ Verify snapshot files
+            SNAPSHOT_DIR=/opt/flutter/bin/cache/artifacts/engine/linux-arm64
+            ls -lh \$SNAPSHOT_DIR
+            file \$SNAPSHOT_DIR/frontend_server_aot.dart.snapshot
+            file \$SNAPSHOT_DIR/const_finder.dart.snapshot
+            file \$SNAPSHOT_DIR/vm_isolate_snapshot.bin
+
+            # 10️⃣ Copy snapshots to workspace for GitHub Actions upload
+            cp \$SNAPSHOT_DIR/frontend_server_aot.dart.snapshot /workspace/
+            cp \$SNAPSHOT_DIR/const_finder.dart.snapshot /workspace/
+            cp \$SNAPSHOT_DIR/vm_isolate_snapshot.bin /workspace/
+          "
+
+      # 11️⃣ Upload frontend_server_aot.dart.snapshot
+      - name: Upload frontend_server_aot.dart.snapshot
         uses: actions/upload-artifact@v4
         with:
           name: frontend_server_aot_snapshot
-          path: flutter/bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-          retention-days: 7
+          path: ./frontend_server_aot.dart.snapshot
+
+      # 12️⃣ Upload const_finder.dart.snapshot
+      - name: Upload const_finder.dart.snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: const_finder_snapshot
+          path: ./const_finder.dart.snapshot
+
+      # 13️⃣ Upload vm_isolate_snapshot.bin
+      - name: Upload vm_isolate_snapshot.bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm_isolate_snapshot
+          path: ./vm_isolate_snapshot.bin
