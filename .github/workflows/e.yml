@@ -18,7 +18,7 @@ jobs:
           platforms: arm64
 
       - name: Pull ARM64 Ubuntu container
-        run: docker pull arm64v8/ubuntu:22.04
+        run: docker pull --platform=linux/arm64 arm64v8/ubuntu:22.04
 
       - name: Create working directories
         run: |
