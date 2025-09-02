@@ -5,50 +5,52 @@ on:
 
 jobs:
   fetch-snapshot:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    # Ensure your self-hosted runner is a native ARM64 machine (e.g., Apple M1/M2, Raspberry Pi)
+    # The runner must also have Docker, Git, and a compatible shell installed.
 
     steps:
-      - name: Enable QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Fetch Flutter snapshot inside ARM64 container
+      - name: Fetch Flutter snapshot on native ARM64 host
         run: |
-          docker run --rm --platform linux/arm64 \
-            -v $PWD:/workspace \
-            -w /workspace \
-            arm64v8/ubuntu:22.04 bash -c "
-              set +e
-              
-              apt-get update && apt-get install -y curl unzip file ca-certificates
+          # The script is designed to run directly on the self-hosted ARM64 runner.
+          set -e
+          
+          # Use a temporary directory to avoid conflicts with other jobs
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
 
-              # Create workspace for Flutter SDK
-              mkdir -p flutter && cd flutter
+          echo "🚀 Cloning the Flutter SDK repository to $TEMP_DIR..."
+          git clone https://github.com/flutter/flutter.git --branch 3.35.2 --depth 1 ./flutter_sdk
 
-              # Download Flutter SDK (stable 3.35.2) but do not precache
-              curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.35.2-stable.tar.xz -o flutter.tar.xz
-              tar -xf flutter.tar.xz --strip-components=1
-              
-              # Verify and extract only the frontend_server_aot.dart.snapshot
-              SNAPSHOT_FILE=bin/cache/artifacts/engine/linux-arm64/frontend_server_aot.dart.snapshot
-              if [ ! -f \"$SNAPSHOT_FILE\" ]; then
-                echo \"❌ Snapshot file not found: $SNAPSHOT_FILE\"
-                exit 1
-              fi
-              echo \"🔍 Checking snapshot...\"
-              file \"$SNAPSHOT_FILE\"
-              head -c 64 \"$SNAPSHOT_FILE\"
+          # Set up the Flutter environment variables for the current shell session
+          export PATH="$PATH:$TEMP_DIR/flutter_sdk/bin"
 
-              # Copy snapshot to workspace root for upload
-              cp \"$SNAPSHOT_FILE\" /workspace/frontend_server_aot.dart.snapshot
-            "
+          echo "📦 Pre-caching artifacts for Linux ARM64..."
+          # This command will download the specific frontend_server.aot.dart.snapshot
+          # and other necessary artifacts for the arm64 architecture.
+          flutter precache --linux-arm64
 
+          # Define the exact path to the snapshot file
+          SNAPSHOT_FILE="$TEMP_DIR/flutter_sdk/bin/cache/artifacts/engine/linux-arm64/frontend_server.aot.dart.snapshot"
+
+          # Verify that the file was successfully downloaded and exists
+          if [ ! -f "$SNAPSHOT_FILE" ]; then
+            echo "❌ The snapshot file was not found after precaching."
+            exit 1
+          fi
+
+          echo "🔍 Analyzing the snapshot file..."
+          # The 'file' command is a great way to verify the file type and architecture.
+          file "$SNAPSHOT_FILE"
+          
+          echo "✅ Snapshot successfully downloaded and verified."
+
+          # Copy the snapshot to a known location for the next step.
+          cp "$SNAPSHOT_FILE" /home/runner/work/frontend_server.aot.dart.snapshot
+        
       - name: Upload snapshot artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend_server_aot_snapshot
-          path: frontend_server_aot.dart.snapshot
+          path: /home/runner/work/frontend_server.aot.dart.snapshot
+          retention-days: 7
