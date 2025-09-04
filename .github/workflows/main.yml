@@ -83,3 +83,13 @@ jobs:
         with:
           name: flutter_linux_arm64_android_web_sdk
           path: flutter_linux_arm64_android_web_sdk.tar.gz
+
+      - name: Publish SDK to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0
+          name: Flutter Linux ARM64 SDK v1.0.0
+          files: ./flutter_linux_arm64_android_web_sdk.tar.gz
+          notes: "Fully native Linux ARM64 Flutter SDK (experimental, daemon fixes applied)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
