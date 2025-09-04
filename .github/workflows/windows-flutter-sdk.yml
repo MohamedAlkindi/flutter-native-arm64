@@ -29,7 +29,7 @@ jobs:
         run: |
           git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
           cd flutter
-          .\bin\cache\dart-sdk\bin\dart --version || Write-Host '⚠ Dart bootstrap skipped'
+          .\bin\cache\dart-sdk\bin\dart.exe --version || Write-Host '⚠ Dart bootstrap skipped'
 
       - name: Build Flutter CLI and Dart SDK for Windows ARM64
         run: |
