@@ -2,6 +2,8 @@ name: Build Flutter SDK (Linux ARM64 Host, Android + Web only via QEMU)
 
 on:
   workflow_dispatch:
+permissions:
+ contents: write
 
 jobs:
   build-flutter-sdk:
@@ -90,6 +92,6 @@ jobs:
           tag_name: v1.0.0
           name: Flutter Linux ARM64 SDK v1.0.0
           files: ./flutter_linux_arm64_android_web_sdk.tar.gz
-          notes: "Fully native Linux ARM64 Flutter SDK (experimental, daemon fixes applied)"
+          body: "Fully native Linux ARM64 Flutter SDK (experimental, daemon fixes applied)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
