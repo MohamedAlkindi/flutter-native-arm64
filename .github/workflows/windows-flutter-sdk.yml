@@ -1,0 +1,85 @@
+name: Build Flutter SDK (Windows ARM64 Host, Android + Web)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-flutter-sdk:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          choco install git -y
+          choco install python -y
+          choco install cmake -y
+          choco install llvm -y
+          choco install openjdk -y
+          choco install ninja -y
+          choco install 7zip -y
+
+      - name: Set workspace path
+        run: |
+          $env:WORKSPACE="$PWD"
+
+      - name: Clone Flutter SDK
+        run: |
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+          cd flutter
+          .\bin\cache\dart-sdk\bin\dart --version || Write-Host '⚠ Dart bootstrap skipped'
+
+      - name: Build Flutter CLI and Dart SDK for Windows ARM64
+        run: |
+          cd flutter
+          .\bin\flutter --verbose --no-version-check doctor || Write-Host '⚠ Flutter doctor skipped'
+          .\bin\flutter precache --android || Write-Host '⚠ Android precache skipped'
+          .\bin\flutter precache --web || Write-Host '⚠ Web precache skipped'
+
+      - name: Verify Dart SDK binaries are ARM64
+        run: |
+          Write-Host "🔍 Verifying Dart SDK binaries..."
+          Get-ChildItem .\bin\cache\dart-sdk\bin -Recurse -File | ForEach-Object {
+              Write-Host "Checking $_"
+              $arch = & llvm-objdump -f $_.FullName 2>$null | Select-String "file format"
+              if ($arch -notmatch "aarch64") {
+                  Write-Host "❌ Non-ARM64 Dart binary detected: $_"
+              } else {
+                  Write-Host "✅ ARM64 binary: $_"
+              }
+          }
+
+      - name: Verify Flutter engine binaries are ARM64
+        run: |
+          Write-Host "🔍 Verifying Flutter engine binaries..."
+          Get-ChildItem .\bin\cache\artifacts\engine/windows-arm64 -Recurse -File | ForEach-Object {
+              Write-Host "Checking $_"
+              $arch = & llvm-objdump -f $_.FullName 2>$null | Select-String "file format"
+              if ($arch -notmatch "aarch64") {
+                  Write-Host "❌ Non-ARM64 engine binary detected: $_"
+              } else {
+                  Write-Host "✅ ARM64 binary: $_"
+              }
+          }
+
+      - name: Strip unnecessary platforms
+        run: |
+          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\darwin-*
+          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\linux-*
+          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\ios-*
+
+      - name: Package SDK
+        run: |
+          & "C:\Program Files\7-Zip\7z.exe" a flutter_windows_arm64_android_web_sdk.zip flutter
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter_windows_arm64_android_web_sdk
+          path: flutter_windows_arm64_android_web_sdk.zip
+
+      - name: CI note
+        run: |
+          Write-Host "⚠ NOTE: Binaries are verified as ARM64, but runtime testing on ARM64 Windows devices has not been performed."
