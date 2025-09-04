@@ -1,13 +1,17 @@
-# Flutter ARM64 Prebuilt SDKs
+# Flutter Native ARM64
 
-This repository provides **prebuilt Flutter SDKs for ARM64 architectures**:
+This repository provides **prebuilt, fully native Flutter SDKs for ARM64 architectures**, for both Linux and Windows.
 
 - **Linux ARM64** – fully tested, includes Dart, Flutter CLI, engine binaries, Web & Android artifacts.
 - **Windows ARM64** – prebuilt, includes the same components as Linux; not tested on hardware.
 
+## Always Up-to-Date
+
+These SDKs are **continuously updated with the latest stable Flutter releases**. Every workflow run ensures you get the newest version without building from source.
+
 ## How to use
 
-1. Download the desired SDK from the [Releases](link-to-releases) page.
+1. Download the desired SDK from the [Releases](https://github.com/MohamedAlkindi/flutter-native-arm64/releases) page.
 2. Extract it to your preferred location.
 3. Add `bin/` to your PATH.
 4. Run `flutter doctor` to verify setup.
