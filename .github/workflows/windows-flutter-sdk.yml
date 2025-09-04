@@ -29,7 +29,14 @@ jobs:
         run: |
           cd flutter
           .\bin\flutter.bat --version
-
+      
+      - name: Pre-cache Flutter engine artifacts
+        run: |
+          cd flutter
+          .\bin\flutter.bat precache --windows
+          .\bin\flutter.bat precache --web
+          .\bin\flutter.bat precache --android
+          
       - name: Verify Dart SDK bootstrap
         run: |
           cd flutter
