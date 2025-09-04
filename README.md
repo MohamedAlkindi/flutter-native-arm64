@@ -16,6 +16,10 @@ These SDKs are **continuously updated with the latest stable Flutter releases**.
 3. Add `bin/` to your PATH.
 4. Run `flutter doctor` to verify setup.
 
+## Screenshot
+<img width="2560" height="1600" alt="Screenshot_20250904_222026_Termux" src="https://github.com/user-attachments/assets/8fb39080-7f28-48fe-9c5f-93dc70c3e2ee" />
+
+
 ## Contributing & Customization
 
 This repository is designed to be **community-friendly and flexible**.  
