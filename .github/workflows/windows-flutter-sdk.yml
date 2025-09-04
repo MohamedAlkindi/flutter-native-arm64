@@ -40,20 +40,37 @@ jobs:
             exit 1
           }
 
-      - name: Check binary architecture (ensure ARM64)
+      - name: Verify Flutter/Dart binaries are ARM64
         run: |
           cd flutter
-          $dartPath = ".\bin\cache\dart-sdk\bin\dart.exe"
-          if (Test-Path $dartPath) {
-            $output = & $env:SystemRoot\System32\where.exe dart.exe
-            Write-Host "Dart path: $output"
-            $arch = (Get-Item $dartPath).VersionInfo
-            Write-Host "Dart File Version: $($arch.FileVersion)"
-            # TODO: Replace with a more robust ARM64 check if needed
-          } else {
-            Write-Host "❌ Dart binary not found for arch check"
-            exit 1
+          function Get-MachineType($path) {
+            $bytes = Get-Content $path -Encoding Byte -TotalCount 1000
+            $peOffset = [BitConverter]::ToInt32($bytes[60..63],0)
+            $machine = [BitConverter]::ToUInt16($bytes[($peOffset+4)..($peOffset+5)],0)
+            return $machine
           }
+
+          $arm64 = 0xAA64
+          $x64   = 0x8664
+          $x86   = 0x14c
+
+          $binaries = Get-ChildItem -Recurse -Include *.exe,*.dll bin\cache
+
+          foreach ($bin in $binaries) {
+            try {
+              $machine = Get-MachineType $bin.FullName
+              switch ($machine) {
+                $arm64 { Write-Host "✅ ARM64: $($bin.FullName)" }
+                $x64   { Write-Host "❌ x64 binary found: $($bin.FullName)"; exit 1 }
+                $x86   { Write-Host "❌ x86 binary found: $($bin.FullName)"; exit 1 }
+                default { Write-Host "⚠ Unknown arch ($machine): $($bin.FullName)"; exit 1 }
+              }
+            } catch {
+              Write-Host "⚠ Non-PE file skipped: $($bin.FullName)"
+            }
+          }
+
+          Write-Host "✅ All Dart/Flutter PE binaries are ARM64"
 
       - name: Package SDK
         run: |
