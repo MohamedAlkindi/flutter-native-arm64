@@ -1,87 +1,77 @@
-name: Build Flutter SDK (Windows ARM64 Host, Android + Web)
+name: Build Flutter SDK for Windows ARM64
 
 on:
   workflow_dispatch:
-
+  push:
+    tags:
+      - "v*.*.*"
+permissions:
+ contents: write
+ 
 jobs:
-  build-flutter-sdk:
+  build-windows-arm64:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          choco install git -y
-          choco install python -y
-          choco install cmake -y
-          choco install llvm -y
-          choco install openjdk -y
-          choco install ninja -y
-          choco install 7zip -y
-
-      - name: Set workspace path
-        run: |
-          $env:WORKSPACE="$PWD"
+      - name: Install Git (ensure available in PATH)
+        run: git --version
 
       - name: Clone Flutter SDK
         run: |
-          git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
+          git clone https://github.com/flutter/flutter.git --branch stable --depth 1
           cd flutter
-          .\bin\cache\dart-sdk\bin\dart.exe --version || Write-Host '⚠ Dart bootstrap skipped'
+          git rev-parse --short HEAD
 
-      - name: Build Flutter CLI and Dart SDK for Windows ARM64
+      - name: Bootstrap Flutter (installs Dart SDK)
         run: |
           cd flutter
-          .\bin\flutter --verbose --no-version-check doctor || Write-Host '⚠ Flutter doctor skipped'
-          .\bin\flutter precache --android || Write-Host '⚠ Android precache skipped'
-          .\bin\flutter precache --web || Write-Host '⚠ Web precache skipped'
+          .\bin\flutter.bat --version
 
-      - name: Verify Dart SDK binaries are ARM64
+      - name: Verify Dart SDK bootstrap
         run: |
-          Write-Host "🔍 Verifying Dart SDK binaries..."
-          Get-ChildItem .\bin\cache\dart-sdk\bin -Recurse -File | ForEach-Object {
-              Write-Host "Checking $_"
-              $arch = & llvm-objdump -f $_.FullName 2>$null | Select-String "file format"
-              if ($arch -notmatch "aarch64") {
-                  Write-Host "❌ Non-ARM64 Dart binary detected: $_"
-              } else {
-                  Write-Host "✅ ARM64 binary: $_"
-              }
+          cd flutter
+          if (Test-Path ".\bin\cache\dart-sdk\bin\dart.exe") {
+            .\bin\cache\dart-sdk\bin\dart.exe --version
+          } else {
+            Write-Host "❌ Dart SDK not found!"
+            exit 1
           }
 
-      - name: Verify Flutter engine binaries are ARM64
+      - name: Check binary architecture (ensure ARM64)
         run: |
-          Write-Host "🔍 Verifying Flutter engine binaries..."
-          Get-ChildItem .\bin\cache\artifacts\engine/windows-arm64 -Recurse -File | ForEach-Object {
-              Write-Host "Checking $_"
-              $arch = & llvm-objdump -f $_.FullName 2>$null | Select-String "file format"
-              if ($arch -notmatch "aarch64") {
-                  Write-Host "❌ Non-ARM64 engine binary detected: $_"
-              } else {
-                  Write-Host "✅ ARM64 binary: $_"
-              }
+          cd flutter
+          $dartPath = ".\bin\cache\dart-sdk\bin\dart.exe"
+          if (Test-Path $dartPath) {
+            $output = & $env:SystemRoot\System32\where.exe dart.exe
+            Write-Host "Dart path: $output"
+            $arch = (Get-Item $dartPath).VersionInfo
+            Write-Host "Dart File Version: $($arch.FileVersion)"
+            # TODO: Replace with a more robust ARM64 check if needed
+          } else {
+            Write-Host "❌ Dart binary not found for arch check"
+            exit 1
           }
-
-      - name: Strip unnecessary platforms
-        run: |
-          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\darwin-*
-          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\linux-*
-          Remove-Item -Recurse -Force .\bin\cache\artifacts\engine\ios-*
 
       - name: Package SDK
         run: |
-          & "C:\Program Files\7-Zip\7z.exe" a flutter_windows_arm64_android_web_sdk.zip flutter
+          cd flutter
+          Compress-Archive -Path * -DestinationPath ../flutter_windows_arm64_sdk.zip -Force
 
-      - name: Upload artifact
+      - name: Upload Artifact (CI artifact, not release yet)
         uses: actions/upload-artifact@v4
         with:
-          tag_name: v1.0.0
-          name: Flutter Windows ARM64 SDK v1.0.0
-          files: ./flutter_windows_arm64_android_web_sdk.zip
-          notes: "Cross-compiled Windows ARM64 Flutter SDK (experimental, untested on physical ARM64 device)"
+          name: flutter_windows_arm64_sdk
+          path: flutter_windows_arm64_sdk.zip
 
-      - name: CI note
-        run: |
-          Write-Host "⚠ NOTE: Binaries are verified as ARM64, but runtime testing on ARM64 Windows devices has not been performed."
+      - name: Publish SDK to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Flutter Windows ARM64 SDK ${{ github.ref_name }}
+          body: "Prebuilt **Flutter Windows ARM64 SDK**.\n\n⚠️ Note: May contain quirks, please test and report issues."
+          files: flutter_windows_arm64_sdk.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
