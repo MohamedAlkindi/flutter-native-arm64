@@ -1,4 +1,4 @@
-name: Build Flutter SDK (ARM64 Host, Android + Web only via QEMU)
+name: Build Flutter SDK (Linux ARM64 Host, Android + Web only via QEMU)
 
 on:
   workflow_dispatch:
