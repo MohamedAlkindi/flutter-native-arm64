@@ -95,7 +95,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Flutter Windows ARM64 SDK ${{ github.ref_name }}
-          body: "Prebuilt **Flutter Windows ARM64 SDK**.\n\n⚠️ Note: May contain quirks, please test and report issues."
+          body: "This release provides a fully native Flutter SDK for Windows ARM64, prebuilt for convenience.\n\n✅ Includes: \n-Dart SDK\n-Flutter CLI\n-Windows ARM64 engine binaries\n-Web SDK artifacts\n-Android engine artifacts\n\n⚠️ Note: This SDK was built but not tested on a physical Windows ARM64 device. Please share your experience so we can collaboratively refine it.\n\n💡 I encourage the community to provide feedback and contribute to improving the Windows ARM64 Flutter experience."
           files: flutter_windows_arm64_sdk.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
