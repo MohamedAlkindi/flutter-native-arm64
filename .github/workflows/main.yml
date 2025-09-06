@@ -89,9 +89,9 @@ jobs:
       - name: Publish SDK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0.0
+          tag_name: ${{ github.ref_name }}
           name: Flutter Linux ARM64 SDK v1.0.0
           files: ./flutter_linux_arm64_android_web_sdk.tar.gz
-          body: "Fully native Linux ARM64 Flutter SDK (experimental, daemon fixes applied)"
+          body: "This release provides a fully native Flutter SDK for Linux ARM64, prebuilt for quick setup.\n\n✅ Includes:\n-Dart SDK\n-Flutter CLI\n-Linux ARM64 engine binaries\n-Web SDK artifacts\n-Android engine artifacts\n\nThis SDK allows developers to get started on Linux ARM64 without building from source.\n\n💡 We welcome collaboration! If you notice anything, share feedback and together we can improve the ARM64"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
