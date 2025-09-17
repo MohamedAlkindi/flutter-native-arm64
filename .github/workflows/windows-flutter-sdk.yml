@@ -51,37 +51,37 @@ jobs:
           $FLUTTER_VERSION = Get-Content flutter\bin\internal\version
           echo "FLUTTER_VERSION=$FLUTTER_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-            - name: Verify Flutter engine binaries are ARM64
-              run: |
-                cd flutter
-                function Get-MachineType($path) {
-                  $bytes = Get-Content $path -Encoding Byte -TotalCount 1000
-                  $peOffset = [BitConverter]::ToInt32($bytes[60..63],0)
-                  $machine = [BitConverter]::ToUInt16($bytes[($peOffset+4)..($peOffset+5)],0)
-                  return $machine
-                }
-      
-                $arm64 = 0xAA64
-                $x64   = 0x8664
-                $x86   = 0x14c
-      
-                $binaries = Get-ChildItem -Recurse -Include *.exe,*.dll bin\cache\artifacts\engine\windows-arm64
-      
-                foreach ($bin in $binaries) {
-                  try {
-                    $machine = Get-MachineType $bin.FullName
-                    switch ($machine) {
-                      $arm64 { Write-Host "✅ ARM64: $($bin.FullName)" }
-                      $x64   { Write-Host "❌ x64 engine binary found: $($bin.FullName)"; exit 1 }
-                      $x86   { Write-Host "❌ x86 engine binary found: $($bin.FullName)"; exit 1 }
-                      default { Write-Host "⚠ Unknown arch ($machine): $($bin.FullName)"; exit 1 }
-                    }
-                  } catch {
-                    Write-Host "⚠ Non-PE file skipped: $($bin.FullName)"
-                  }
-                }
-      
-                Write-Host "✅ All Flutter engine binaries are ARM64"
+      - name: Verify Flutter engine binaries are ARM64
+        run: |
+          cd flutter
+          function Get-MachineType($path) {
+            $bytes = Get-Content $path -Encoding Byte -TotalCount 1000
+            $peOffset = [BitConverter]::ToInt32($bytes[60..63],0)
+            $machine = [BitConverter]::ToUInt16($bytes[($peOffset+4)..($peOffset+5)],0)
+            return $machine
+          }
+
+          $arm64 = 0xAA64
+          $x64   = 0x8664
+          $x86   = 0x14c
+
+          $binaries = Get-ChildItem -Recurse -Include *.exe,*.dll bin\cache\artifacts\engine\windows-arm64
+
+          foreach ($bin in $binaries) {
+            try {
+              $machine = Get-MachineType $bin.FullName
+              switch ($machine) {
+                $arm64 { Write-Host "✅ ARM64: $($bin.FullName)" }
+                $x64   { Write-Host "❌ x64 engine binary found: $($bin.FullName)"; exit 1 }
+                $x86   { Write-Host "❌ x86 engine binary found: $($bin.FullName)"; exit 1 }
+                default { Write-Host "⚠ Unknown arch ($machine): $($bin.FullName)"; exit 1 }
+              }
+            } catch {
+              Write-Host "⚠ Non-PE file skipped: $($bin.FullName)"
+            }
+          }
+
+          Write-Host "✅ All Flutter engine binaries are ARM64"
             
       - name: Package SDK
         run: |
