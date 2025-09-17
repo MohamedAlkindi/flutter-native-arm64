@@ -85,10 +85,12 @@ jobs:
         with:
           name: flutter_linux_arm64_android_web_sdk
           path: flutter_linux_arm64_android_web_sdk.tar.gz
-
+      
       - name: Get Flutter version
         run: |
-          FLUTTER_VERSION=$(cat flutter/bin/internal/version)
+          cd flutter
+          FLUTTER_VERSION=$(./bin/flutter --version | grep 'Flutter' | awk '{print $2}')
+          echo "Detected Flutter version: $FLUTTER_VERSION"
           echo "FLUTTER_VERSION=$FLUTTER_VERSION" >> $GITHUB_ENV
 
       - name: Publish SDK to GitHub Release
