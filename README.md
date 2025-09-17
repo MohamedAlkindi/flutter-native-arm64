@@ -1,10 +1,9 @@
 # Flutter Native ARM64
 
-This repository provides **prebuilt, fully native Flutter SDKs for ARM64 architectures**, for both Linux and Windows.
+This repository provides **prebuilt, fully native Flutter SDKs for ARM64 architectures**, for Linux.
 
 - **Linux ARM64** – fully tested, includes Dart, Flutter CLI, engine binaries, Web & Android artifacts.
-- **Windows ARM64** – prebuilt, includes the same components as Linux; not tested on hardware.
-
+  
 ## Always Up-to-Date
 
 These SDKs are **continuously updated with the latest stable Flutter releases**. Every workflow run ensures you get the newest version without building from source.
@@ -25,7 +24,7 @@ These SDKs are **continuously updated with the latest stable Flutter releases**.
 This repository is designed to be **community-friendly and flexible**.  
 
 - Feel free to **fork this project** and edit the GitHub Actions workflow for your own needs:
-  - Add or remove pre-cache steps (Web, Android, Windows, Linux, etc.)  
+  - Add or remove pre-cache steps (Web, Android, Linux, etc.)  
   - Customize packaging or artifact verification  
   - Adjust SDK versions or channels  
   - Tweak any part of the workflow to fit your environment  
