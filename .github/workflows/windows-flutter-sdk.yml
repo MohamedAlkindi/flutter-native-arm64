@@ -45,40 +45,44 @@ jobs:
           } else {
             Write-Host "❌ Dart SDK not found!"
             exit 1
-          }
-
-      - name: Verify Flutter/Dart binaries are ARM64
+                }
+      - name: Get Flutter version
         run: |
-          cd flutter
-          function Get-MachineType($path) {
-            $bytes = Get-Content $path -Encoding Byte -TotalCount 1000
-            $peOffset = [BitConverter]::ToInt32($bytes[60..63],0)
-            $machine = [BitConverter]::ToUInt16($bytes[($peOffset+4)..($peOffset+5)],0)
-            return $machine
-          }
+          $FLUTTER_VERSION = Get-Content flutter\bin\internal\version
+          echo "FLUTTER_VERSION=$FLUTTER_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $arm64 = 0xAA64
-          $x64   = 0x8664
-          $x86   = 0x14c
-
-          $binaries = Get-ChildItem -Recurse -Include *.exe,*.dll bin\cache
-
-          foreach ($bin in $binaries) {
-            try {
-              $machine = Get-MachineType $bin.FullName
-              switch ($machine) {
-                $arm64 { Write-Host "✅ ARM64: $($bin.FullName)" }
-                $x64   { Write-Host "❌ x64 binary found: $($bin.FullName)"; exit 1 }
-                $x86   { Write-Host "❌ x86 binary found: $($bin.FullName)"; exit 1 }
-                default { Write-Host "⚠ Unknown arch ($machine): $($bin.FullName)"; exit 1 }
-              }
-            } catch {
-              Write-Host "⚠ Non-PE file skipped: $($bin.FullName)"
-            }
-          }
-
-          Write-Host "✅ All Dart/Flutter PE binaries are ARM64"
-
+            - name: Verify Flutter engine binaries are ARM64
+              run: |
+                cd flutter
+                function Get-MachineType($path) {
+                  $bytes = Get-Content $path -Encoding Byte -TotalCount 1000
+                  $peOffset = [BitConverter]::ToInt32($bytes[60..63],0)
+                  $machine = [BitConverter]::ToUInt16($bytes[($peOffset+4)..($peOffset+5)],0)
+                  return $machine
+                }
+      
+                $arm64 = 0xAA64
+                $x64   = 0x8664
+                $x86   = 0x14c
+      
+                $binaries = Get-ChildItem -Recurse -Include *.exe,*.dll bin\cache\artifacts\engine\windows-arm64
+      
+                foreach ($bin in $binaries) {
+                  try {
+                    $machine = Get-MachineType $bin.FullName
+                    switch ($machine) {
+                      $arm64 { Write-Host "✅ ARM64: $($bin.FullName)" }
+                      $x64   { Write-Host "❌ x64 engine binary found: $($bin.FullName)"; exit 1 }
+                      $x86   { Write-Host "❌ x86 engine binary found: $($bin.FullName)"; exit 1 }
+                      default { Write-Host "⚠ Unknown arch ($machine): $($bin.FullName)"; exit 1 }
+                    }
+                  } catch {
+                    Write-Host "⚠ Non-PE file skipped: $($bin.FullName)"
+                  }
+                }
+      
+                Write-Host "✅ All Flutter engine binaries are ARM64"
+            
       - name: Package SDK
         run: |
           cd flutter
@@ -93,9 +97,22 @@ jobs:
       - name: Publish SDK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Flutter Windows ARM64 SDK ${{ github.ref_name }}
-          body: "This release provides a fully native Flutter SDK for Windows ARM64, prebuilt for convenience.\n\n✅ Includes: \n-Dart SDK\n-Flutter CLI\n-Windows ARM64 engine binaries\n-Web SDK artifacts\n-Android engine artifacts\n\n⚠️ Note: This SDK was built but not tested on a physical Windows ARM64 device. Please share your experience so we can collaboratively refine it.\n\n💡 I encourage the community to provide feedback and contribute to improving the Windows ARM64 Flutter experience."
+          tag_name: "flutter-${{ env.FLUTTER_VERSION }}-${{ github.run_number }}-windows-arm64"
+          name: "Flutter ${{ env.FLUTTER_VERSION }} Windows ARM64 SDK"
           files: flutter_windows_arm64_sdk.zip
+          body: |
+            This release provides a Flutter SDK build for **Windows ARM64**.
+
+            ✅ Includes:
+            - Dart SDK (currently x64, runs under emulation)
+            - Flutter CLI
+            - Windows ARM64 engine binaries
+            - Web SDK artifacts
+            - Android engine artifacts
+
+            ⚠️ Dart is x64 because upstream Dart does not yet publish Windows ARM64 builds.
+            Flutter engine is ARM64-native.
+
+            💡 Please test on real hardware and share feedback to help improve the Windows ARM64 Flutter experience.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
