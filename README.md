@@ -10,10 +10,10 @@ These SDKs are **continuously updated with the latest stable Flutter releases**.
 
 ## How to use
 
-1. Download the desired SDK from the [Releases](https://github.com/MohamedAlkindi/flutter-native-arm64/releases) page.
+1. Download the desired SDK version from the [Releases](https://github.com/MohamedAlkindi/flutter-native-arm64/releases) page.
 2. Extract it to your preferred location.
 3. Add `bin/` to your PATH.
-4. Run `flutter doctor` to verify setup.
+4. Run `flutter doctor` to verify setup (this step might take some time before it shows the result, so please be patient).
 
 ## Screenshot
 <img width="2560" height="1600" alt="Screenshot_20250904_222026_Termux" src="https://github.com/user-attachments/assets/8fb39080-7f28-48fe-9c5f-93dc70c3e2ee" />
