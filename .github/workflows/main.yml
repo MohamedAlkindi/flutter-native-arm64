@@ -68,28 +68,7 @@ jobs:
               echo '✅ Flutter engine binaries check done'
 
 
-              # New Edit starts.
               
-              # 🆕 Build gen_snapshot for linux-arm64 host
-              echo '🔨 Building linux-arm64 gen_snapshot ...'
-
-              # Install build deps (if not already installed)
-              apt-get install -y clang lld ninja-build python3 cmake pkg-config
-
-              # Enter Flutter engine source (now lives inside the Flutter repo)
-              cd ./engine
-              ./flutter/tools/gn --runtime-mode release --linux-cpu arm64 --no-lto
-              ninja -C out/linux_release_arm64 gen_snapshot
-              ninja -C out/linux_release_arm64 frontend_server.dart.snapshot
-              
-              # Copy built gen_snapshot into Flutter SDK cache
-              mkdir -p ../../bin/cache/artifacts/engine/linux-arm64
-              cp out/linux_release_arm64/gen_snapshot ../../bin/cache/artifacts/engine/linux-arm64/
-
-              cd ../..
-              echo '✅ gen_snapshot built and copied to cache'
-
-              #New edit ends.
               
               
               # Strip unnecessary platforms for lean SDK
