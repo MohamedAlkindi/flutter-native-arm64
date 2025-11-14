@@ -16,9 +16,15 @@ These SDKs are **continuously updated with the latest stable Flutter releases**.
 4. Run `flutter doctor` to verify setup (this step might take some time before it shows the result, so please be patient).
 
 ## Screenshot
-<img width="2560" height="1600" alt="Screenshot_20250904_222026_Termux" src="https://github.com/user-attachments/assets/8fb39080-7f28-48fe-9c5f-93dc70c3e2ee" />
+<img width="2560" height="1600" alt="Screenshot_20251114_161905_TermuxX11" src="https://github.com/user-attachments/assets/76b20c8c-0f15-4369-8fbe-b604f41a379f" />
 
 
+## Useful Links "All thanks to [@HomuHomu833](https://github.com/HomuHomu833)!"
+- Android SDK for arm64:
+https://github.com/HomuHomu833/android-sdk-custom/releases
+
+- Android NDK for arm64:
+  https://github.com/HomuHomu833/android-ndk-custom/releases
 ## Contributing & Customization
 
 This repository is designed to be **community-friendly and flexible**.  
