@@ -25,6 +25,10 @@ https://github.com/HomuHomu833/android-sdk-custom/releases
 
 - Android NDK for arm64:
   https://github.com/HomuHomu833/android-ndk-custom/releases
+  
+- CMake for arm64:
+  https://github.com/HomuHomu833/cmake-custom/releases
+  
 ## Contributing & Customization
 
 This repository is designed to be **community-friendly and flexible**.  
