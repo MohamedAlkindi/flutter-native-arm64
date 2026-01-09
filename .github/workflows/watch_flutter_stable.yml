@@ -52,16 +52,21 @@ jobs:
             --json tagName \
             --jq '.[0].tagName' || true)
       
+          echo "🔍 Raw release tag: $LAST_TAG"
+      
           if [ -z "$LAST_TAG" ]; then
             echo "⚠️ No previous releases found"
             echo "last=none" >> $GITHUB_OUTPUT
           else
-            CLEAN_VERSION=$(echo "$LAST_TAG" \
-              | sed 's/^flutter-//' \
-              | sed 's/-.*//')
+            VERSION=$(echo "$LAST_TAG" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
       
-            echo "last=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-            echo "📦 Last published SDK version: $CLEAN_VERSION"
+            if [ -z "$VERSION" ]; then
+              echo "❌ Failed to extract version from tag"
+              exit 1
+            fi
+      
+            echo "last=$VERSION" >> $GITHUB_OUTPUT
+            echo "📦 Last published SDK version: $VERSION"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
