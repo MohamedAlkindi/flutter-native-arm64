@@ -90,32 +90,26 @@ jobs:
         with:
           name: flutter_linux_arm64_android_web_sdk
           path: flutter_linux_arm64_android_web_sdk.tar.gz
-      
       - name: Get Flutter version
+        id: flutterver
         run: |
           cd flutter
           FLUTTER_VERSION=$(./bin/flutter --version | grep 'Flutter' | awk '{print $2}')
           echo "Detected Flutter version: $FLUTTER_VERSION"
+      
+          # Save for GITHUB_ENV for later steps
           echo "FLUTTER_VERSION=$FLUTTER_VERSION" >> $GITHUB_ENV
-
+      
+          # Save as step output for release action
+          echo "flutterver=$FLUTTER_VERSION" >> $GITHUB_OUTPUT
+          
       - name: Publish SDK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "flutter-${{ env.FLUTTER_VERSION }}-${{ github.run_number }}-linux"
-          name: "Flutter ${{ env.FLUTTER_VERSION }} Linux ARM64 SDK"
+          tag_name: "flutter-${{ steps.flutterver.outputs.flutterver }}-${{ github.run_number }}-linux"
+          name: "Flutter ${{ steps.flutterver.outputs.flutterver }} Linux ARM64 SDK"
           files: ./flutter_linux_arm64_android_web_sdk.tar.gz
           body: |
             This release provides a fully native Flutter SDK for Linux ARM64, prebuilt for quick setup.
-
-            ✅ Includes:
-            - Dart SDK
-            - Flutter CLI
-            - Linux ARM64 engine binaries
-            - Web SDK artifacts
-            - Android engine artifacts
-
-            This SDK allows developers to get started on Linux ARM64 without building from source.
-
-            💡 We welcome collaboration! If you notice anything, share feedback and together we can improve ARM64.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
