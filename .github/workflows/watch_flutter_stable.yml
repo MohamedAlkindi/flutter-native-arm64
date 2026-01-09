@@ -3,7 +3,11 @@ name: Watch Flutter Stable Releases
 on:
   schedule:
     - cron: "0 */12 * * *"   # every 12 hours
-  workflow_dispatch:        # manual test button
+  workflow_dispatch:        # manual trigger for testing
+
+permissions:
+  contents: read
+  actions: write
 
 concurrency:
   group: flutter-stable-watch
@@ -14,56 +18,89 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Fetch Flutter stable tags
+      # -----------------------------
+      # 1️⃣ Fetch latest Flutter stable tag
+      # -----------------------------
+      - name: Fetch Flutter stable tag
         id: flutter
         run: |
           git clone --quiet https://github.com/flutter/flutter.git
           cd flutter
 
-          # Latest semantic stable version only (no -dev, no -rc)
           LATEST=$(git tag --list \
             | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
             | sort -V \
             | tail -n 1)
 
+          if [ -z "$LATEST" ]; then
+            echo "❌ Failed to determine Flutter stable version"
+            exit 1
+          fi
+
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "🟢 Latest Flutter stable tag: $LATEST"
 
-      - name: Get last built Flutter version
+      # -----------------------------
+      # 2️⃣ Get last published SDK version
+      # -----------------------------
+      - name: Get last published SDK version
         id: last
         run: |
-          LAST=$(gh release list \
+          LAST_TAG=$(gh release list \
             --limit 1 \
             --json tagName \
-            --jq '.[0].tagName' \
-            | sed 's/^flutter-//' \
-            | sed 's/-.*//')
+            --jq '.[0].tagName' || true)
 
-          echo "last=$LAST" >> $GITHUB_OUTPUT
-          echo "📦 Last published SDK version: $LAST"
+          if [ -z "$LAST_TAG" ]; then
+            echo "⚠️ No previous releases found"
+            echo "last=none" >> $GITHUB_OUTPUT
+          else
+            CLEAN_VERSION=$(echo "$LAST_TAG" \
+              | sed 's/^flutter-//' \
+              | sed 's/-.*//')
+
+            echo "last=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+            echo "📦 Last published SDK version: $CLEAN_VERSION"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # -----------------------------
+      # 3️⃣ Decide whether to trigger build
+      # -----------------------------
       - name: Compare versions
         id: compare
         run: |
-          if [ "${{ steps.flutter.outputs.latest }}" = "${{ steps.last.outputs.last }}" ]; then
+          LATEST="${{ steps.flutter.outputs.latest }}"
+          LAST="${{ steps.last.outputs.last }}"
+
+          echo "🔍 Comparing versions"
+          echo "   Flutter latest: $LATEST"
+          echo "   Last built:     $LAST"
+
+          if [ "$LAST" = "none" ]; then
+            echo "trigger=true" >> $GITHUB_OUTPUT
+            echo "🆕 First SDK build — triggering"
+          elif [ "$LATEST" = "$LAST" ]; then
             echo "trigger=false" >> $GITHUB_OUTPUT
-            echo "🟡 No new stable release — nothing to do"
+            echo "🟡 No new stable release — skipping"
           else
             echo "trigger=true" >> $GITHUB_OUTPUT
-            echo "🚀 New Flutter stable detected — build WILL be triggered"
+            echo "🚀 New Flutter stable detected — triggering build"
           fi
 
+      # -----------------------------
+      # 4️⃣ Trigger ARM64 SDK build workflow
+      # -----------------------------
       - name: Trigger ARM64 SDK build
         if: steps.compare.outputs.trigger == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            console.log("Triggering build workflow for new Flutter stable...");
+            console.log("🚀 Dispatching build workflow (main.yml)...");
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: "build_flutter_sdk.yml",
+              workflow_id: "main.yml",
               ref: "main"
             })
