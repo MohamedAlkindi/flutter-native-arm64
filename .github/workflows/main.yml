@@ -2,6 +2,7 @@ name: Build Flutter SDK (Linux ARM64 Host, Android + Web only via QEMU)
 
 on:
   workflow_dispatch:
+  workflow_call:
 permissions:
  contents: write
 
