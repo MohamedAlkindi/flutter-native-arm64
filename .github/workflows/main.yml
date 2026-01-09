@@ -116,7 +116,11 @@ jobs:
       
           # Optional: save in environment for later steps
           echo "FLUTTER_VERSION=$LATEST" >> $GITHUB_ENV
-          
+
+          - name: Rename artifact to include Flutter version
+            run: |
+            mv flutter_linux_arm64_android_web_sdk.tar.gz \ flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz
+      
       - name: Publish SDK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
