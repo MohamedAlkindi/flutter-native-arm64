@@ -47,10 +47,11 @@ jobs:
         id: last
         run: |
           LAST_TAG=$(gh release list \
+            --repo MohamedAlkindi/flutter-native-arm64 \
             --limit 1 \
             --json tagName \
             --jq '.[0].tagName' || true)
-
+      
           if [ -z "$LAST_TAG" ]; then
             echo "⚠️ No previous releases found"
             echo "last=none" >> $GITHUB_OUTPUT
@@ -58,7 +59,7 @@ jobs:
             CLEAN_VERSION=$(echo "$LAST_TAG" \
               | sed 's/^flutter-//' \
               | sed 's/-.*//')
-
+      
             echo "last=$CLEAN_VERSION" >> $GITHUB_OUTPUT
             echo "📦 Last published SDK version: $CLEAN_VERSION"
           fi
