@@ -1,0 +1,69 @@
+name: Watch Flutter Stable Releases
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"   # every 12 hours
+  workflow_dispatch:        # manual test button
+
+concurrency:
+  group: flutter-stable-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch Flutter stable tags
+        id: flutter
+        run: |
+          git clone --quiet https://github.com/flutter/flutter.git
+          cd flutter
+
+          # Latest semantic stable version only (no -dev, no -rc)
+          LATEST=$(git tag --list \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n 1)
+
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "🟢 Latest Flutter stable tag: $LATEST"
+
+      - name: Get last built Flutter version
+        id: last
+        run: |
+          LAST=$(gh release list \
+            --limit 1 \
+            --json tagName \
+            --jq '.[0].tagName' \
+            | sed 's/^flutter-//' \
+            | sed 's/-.*//')
+
+          echo "last=$LAST" >> $GITHUB_OUTPUT
+          echo "📦 Last published SDK version: $LAST"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compare versions
+        id: compare
+        run: |
+          if [ "${{ steps.flutter.outputs.latest }}" = "${{ steps.last.outputs.last }}" ]; then
+            echo "trigger=false" >> $GITHUB_OUTPUT
+            echo "🟡 No new stable release — nothing to do"
+          else
+            echo "trigger=true" >> $GITHUB_OUTPUT
+            echo "🚀 New Flutter stable detected — build WILL be triggered"
+          fi
+
+      - name: Trigger ARM64 SDK build
+        if: steps.compare.outputs.trigger == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log("Triggering build workflow for new Flutter stable...");
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "build_flutter_sdk.yml",
+              ref: "main"
+            })
