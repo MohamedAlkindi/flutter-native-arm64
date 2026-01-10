@@ -84,49 +84,35 @@ jobs:
               tar -czf flutter_linux_arm64_android_web_sdk.tar.gz flutter
               echo '✅ Super-lean ARM64 SDK packaged at /workspace/flutter_linux_arm64_android_web_sdk.tar.gz'
             "
-
+      
+      # Get Flutter stable version (from existing cloned SDK)
+      - name: Get Flutter stable version
+        id: flutterver
+        run: |
+          cd flutter
+          VERSION=$(git describe --tags --abbrev=0)
+          [ -z "$VERSION" ] && exit 1
+          echo "flutterver=$VERSION" >> $GITHUB_OUTPUT
+      
+      # Rename SDK archive to include Flutter version
+      - name: Rename SDK archive
+        run: |
+          mv flutter_linux_arm64_android_web_sdk.tar.gz \
+             flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz
+      
+      # Upload artifact
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flutter_linux_arm64_android_web_sdk
-          path: flutter_linux_arm64_android_web_sdk.tar.gz
-
-      - name: Get Flutter version for release
-        id: flutterver
-        run: |
-          # Clone Flutter repo (quiet)
-          git clone --quiet https://github.com/flutter/flutter.git
-          cd flutter
+          name: flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk
+          path: flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz
       
-          # Get latest stable tag (semantic version only)
-          LATEST=$(git tag --list \
-            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
-            | sort -V \
-            | tail -n 1)
-      
-          if [ -z "$LATEST" ]; then
-            echo "❌ Failed to determine Flutter stable version"
-            exit 1
-          fi
-      
-          echo "Detected Flutter version: $LATEST"
-      
-          # Save as step output for use in release
-          echo "flutterver=$LATEST" >> $GITHUB_OUTPUT
-      
-          # Optional: save in environment for later steps
-          echo "FLUTTER_VERSION=$LATEST" >> $GITHUB_ENV
-      - name: Rename artifact to include Flutter version
-        run: |
-          mv flutter_linux_arm64_android_web_sdk.tar.gz flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz
-          
+      # Publish GitHub Release
       - name: Publish SDK to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "flutter-${{ steps.flutterver.outputs.flutterver }}-${{ github.run_number }}-linux"
-          name: "Flutter ${{ steps.flutterver.outputs.flutterver }} Linux ARM64 SDK"
-          files: "./flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz"
-          body: |
-            This release provides a fully native Flutter SDK for Linux ARM64, prebuilt for quick setup.
+          tag_name: flutter-${{ steps.flutterver.outputs.flutterver }}-${{ github.run_number }}-linux
+          name: Flutter ${{ steps.flutterver.outputs.flutterver }} Linux ARM64 SDK
+          files: flutter_v${{ steps.flutterver.outputs.flutterver }}_linux_arm64_android_web_sdk.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
