@@ -16,7 +16,8 @@ These SDKs are **continuously updated with the latest stable Flutter releases**.
 4. Run `flutter doctor` to verify setup (this step might take some time before it shows the result, so please be patient).
 
 ## Screenshot
-<img width="2560" height="1600" alt="Screenshot_20260213_120804_TermuxX11" src="https://github.com/user-attachments/assets/a6845453-de7a-4c97-b0c4-7a26d7c0757e" />
+<img width="2560" height="1600" alt="Screenshot_20260331_174946_TermuxX11" src="https://github.com/user-attachments/assets/823df126-6eac-469f-855d-f50815228af0" />
+
 
 
 
