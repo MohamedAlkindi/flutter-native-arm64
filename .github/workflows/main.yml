@@ -39,7 +39,7 @@ jobs:
               cd /workspace
 
               # Clone Flutter SDK
-              git clone https://github.com/flutter/flutter.git -b master --depth 1 flutter
+              git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter
               cd flutter
 
               # Bootstrap Dart SDK for ARM64 host
